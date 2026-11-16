@@ -1,0 +1,1383 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kalorien-Tracker</title>
+<meta name="theme-color" content="#121722">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<script>
+try { var t = localStorage.getItem('kalorien-thema'); if (t) document.documentElement.dataset.thema = t; } catch (e) {}
+</script>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #121722; --bg2: #24344a; --flaeche: #1e2430; --flaeche2: #2a3240; --ink: #f1f3f6; --ink2: #aeb6c2;
+  --linie: #333c4b; --akzent: #5aa2f5; --akzent-ink: #0b1626; --warn: #ff9a5c; --spur: #39434f;
+  --pille: #1e3350; --pille-ink: #7cb8fb; --nav: #1a202b;
+}
+:root[data-thema="hell"] {
+  color-scheme: light;
+  --bg: #f1f3f7; --bg2: #dfe7f2; --flaeche: #ffffff; --flaeche2: #e9edf3; --ink: #171c24; --ink2: #525b68;
+  --linie: #dde2ea; --akzent: #1f6fd6; --akzent-ink: #ffffff; --warn: #bb3f0b; --spur: #e3e7ee;
+  --pille: #dfeafa; --pille-ink: #1a5fb8; --nav: #ffffff;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg) linear-gradient(var(--bg2), var(--bg) 340px) no-repeat; color: var(--ink); font: 16px/1.45 system-ui, "Segoe UI", Roboto, sans-serif; }
+button, input, select { font: inherit; color: var(--ink); }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+input, select { background: var(--flaeche); border: 1px solid var(--linie); border-radius: 8px; padding: 9px 10px; width: 100%; font-size: 16px; }
+:focus-visible { outline: 2px solid var(--akzent); outline-offset: 2px; }
+.wrap { max-width: 560px; margin: 0 auto; padding: 0 16px calc(100px + env(safe-area-inset-bottom)); }
+.kopf { max-width: 560px; margin: 0 auto; padding: 16px 16px 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; position: relative; }
+.titel { font-size: 28px; font-weight: 700; margin: 0; }
+.titel small { font-size: 16px; }
+.dp { position: absolute; left: 16px; top: 44px; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; }
+nav { position: fixed; z-index: 5; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 560px; display: flex; align-items: center; padding: 6px 12px calc(6px + env(safe-area-inset-bottom)); background: var(--nav); }
+nav button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; font-size: 13px; font-weight: 500; color: var(--ink2); }
+nav button.an { color: var(--ink); font-weight: 700; }
+nav button.fab { flex: none; width: 56px; height: 56px; margin-left: 8px; justify-content: center; border-radius: 50%; background: var(--akzent); color: var(--akzent-ink); }
+.karte { background: var(--flaeche); border-radius: 18px; padding: 16px; margin-top: 12px; }
+h2 { font-size: 17px; margin: 0 0 10px; }
+.klein { font-size: 14px; color: var(--ink2); }
+.rund { width: 40px; height: 40px; border-radius: 50%; background: var(--flaeche2); font-size: 18px; font-weight: 700; flex: none; }
+.woche { display: flex; justify-content: space-between; margin-top: 10px; touch-action: pan-y; user-select: none; }
+.wt { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; font-size: 14px; color: var(--ink2); }
+.wt i { width: 4px; height: 4px; border-radius: 50%; background: transparent; }
+.wt.an { color: var(--ink); font-weight: 700; }
+.wt.an i { background: var(--ink); }
+.wt:disabled { opacity: .4; cursor: default; }
+.gross { font-size: 26px; font-weight: 700; }
+.ringw { position: relative; flex: none; }
+.ringw > div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; line-height: 1.2; }
+.kcal-wrap { display: flex; align-items: center; gap: 22px; }
+.kcal-rechts { flex: 1; min-width: 0; }
+.kcal-rechts .zr { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 7px 0; }
+.kcal-rechts .zr + .zr { border-top: 1px solid var(--linie); }
+.makros { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.makro { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 7px; text-align: center; }
+.makro .name { font-size: 14px; }
+.um { position: absolute; top: -8px; right: -6px; width: 32px; height: 32px; border-radius: 50%; background: var(--flaeche2); font-size: 15px; }
+.balken { height: 10px; background: var(--spur); border-radius: 5px; overflow: hidden; }
+.balken i { display: block; height: 100%; background: var(--akzent); border-radius: 5px; }
+.balken i.drueber { background: var(--warn); }
+.ana { padding: 10px 0; border-top: 1px solid var(--linie); }
+.ana-z { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.ana-z > span:last-child { white-space: nowrap; }
+.balken.duenn { height: 6px; }
+.mikro-g { font-size: 14px; color: var(--ink2); margin: 14px 0 2px; text-transform: uppercase; letter-spacing: .04em; }
+.mikro-gitter { display: grid; grid-template-columns: 1fr; gap: 0 22px; }
+@media (min-width: 480px) { .mikro-gitter { grid-template-columns: 1fr 1fr; } }
+.mikro { padding: 7px 0; }
+.mikro .mz { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 14px; margin-bottom: 4px; }
+select.chip { -webkit-appearance: none; appearance: none; border: 0; width: auto; }
+.abschnitt { font-size: 20px; margin: 22px 0 -2px; }
+.mahlzeit-kopf { display: flex; align-items: center; gap: 12px; }
+.mz-ic { color: var(--akzent); display: flex; }
+.mz-t { flex: 1; min-width: 0; }
+.mz-t b { font-size: 17px; font-weight: 600; display: block; }
+.pille { background: var(--pille); color: var(--pille-ink); padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 15px; }
+.mahlzeit-kopf + .eintrag, .mahlzeit-kopf + .erneut { margin-top: 12px; }
+.erneut { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; text-align: left; border-top: 1px solid var(--linie); padding-top: 10px; font-size: 15px; font-weight: 600; }
+.erneut .plus { font-size: 24px; font-weight: 400; color: var(--ink2); line-height: 1; }
+.knopf { background: var(--akzent); color: var(--akzent-ink); padding: 8px 14px; border-radius: 8px; font-weight: 600; }
+.knopf2 { background: var(--flaeche2); padding: 8px 12px; border-radius: 8px; font-weight: 600; font-size: 15px; }
+.eintrag { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--linie); }
+.eintrag .haupt { flex: 1; text-align: left; padding: 9px 0; min-width: 0; }
+.eintrag .haupt:disabled { cursor: default; }
+.eintrag .wert { font-weight: 600; white-space: nowrap; }
+.weg { width: 32px; height: 32px; border-radius: 50%; color: var(--ink2); font-size: 18px; }
+.weg:hover { background: var(--flaeche2); }
+.gewicht { display: flex; align-items: center; gap: 12px; }
+.gewicht label { flex: 1; font-weight: 600; }
+.gewicht input { width: 110px; }
+.hinweis { background: var(--flaeche2); border-radius: 10px; padding: 12px 14px; margin-top: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.warn { color: var(--warn); font-weight: 600; }
+.feld { display: block; margin-bottom: 12px; }
+.feld > span { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.gitter { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips.zeile { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); }
+.chips.zeile::-webkit-scrollbar { display: none; }
+.chips.zeile .chip { flex: none; }
+.chip { padding: 7px 12px; border-radius: 18px; background: var(--flaeche2); font-size: 15px; font-weight: 500; }
+.chip.an { background: var(--akzent); color: var(--akzent-ink); font-weight: 600; }
+.kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
+.kachel { background: var(--flaeche); border-radius: 18px; padding: 12px 14px; }
+.kachel b { display: block; font-size: 24px; }
+.ergebnis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 10px; }
+.ergebnis b { display: block; font-size: 22px; }
+.chart { width: 100%; }
+.chart svg { display: block; width: 100%; touch-action: pan-y; }
+.chart text { font-size: 13px; fill: var(--ink2); }
+.hit { fill: var(--ink); fill-opacity: 0; }
+.hit:hover { fill-opacity: .08; }
+.legende { display: flex; flex-wrap: wrap; gap: 14px; font-size: 14px; color: var(--ink2); margin-bottom: 8px; }
+.legende i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+#tip { position: fixed; z-index: 50; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 14px; padding: 6px 10px; border-radius: 8px; white-space: pre-line; display: none; max-width: 240px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; margin-top: 10px; }
+th, td { text-align: right; padding: 6px 4px; border-top: 1px solid var(--linie); }
+th:first-child, td:first-child { text-align: left; }
+summary { cursor: pointer; font-weight: 600; }
+dialog { border: 1px solid var(--linie); border-radius: 14px; background: var(--flaeche); color: var(--ink); padding: 0; width: min(540px, calc(100vw - 16px)); max-height: 90dvh; }
+dialog::backdrop { background: rgba(0, 0, 0, .5); }
+.dlg { display: flex; flex-direction: column; max-height: 90dvh; padding: 16px; gap: 12px; }
+.dlg-kopf { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dlg-kopf h2 { margin: 0; }
+.liste { overflow-y: auto; overflow-x: hidden; flex: 1; min-height: 200px; }
+.lm { display: flex; align-items: center; border-top: 1px solid var(--linie); }
+.lm .wahl { flex: 1; text-align: left; padding: 8px 2px; min-width: 0; }
+.stern { width: 40px; height: 40px; font-size: 20px; color: var(--ink2); }
+.stern.an { color: var(--akzent); }
+.vorschau { text-align: center; background: var(--flaeche2); border-radius: 10px; padding: 12px 10px; }
+.vorschau .vgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.vorschau .ringw { margin: 0 auto 5px; }
+.chip.g-an { background: var(--akzent); color: var(--akzent-ink); }
+.dlg.voll { height: 90dvh; }
+.titel-sel { background: none; border: 0; color: var(--akzent); font-size: 19px; font-weight: 700; width: auto; max-width: 70%; padding: 4px 8px; text-align: center; cursor: pointer; }
+.reiter { display: flex; border-bottom: 1px solid var(--linie); margin: 0 -16px; padding: 0 8px; }
+.reiter button { flex: 1; padding: 10px 4px; color: var(--ink2); font-weight: 600; font-size: 15px; border-bottom: 2px solid transparent; }
+.reiter button.an { color: var(--ink); border-bottom-color: var(--akzent); }
+.kacheln2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.kachelb { background: var(--flaeche2); border-radius: 14px; padding: 16px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--akzent); font-weight: 600; font-size: 15px; text-align: center; }
+.kachelb:disabled { opacity: .4; cursor: default; }
+.liste-kopf { font-weight: 700; font-size: 17px; margin: 18px 0 2px; }
+.zeile2 { display: flex; align-items: center; gap: 4px; background: var(--flaeche2); border-radius: 12px; padding: 8px 8px 8px 14px; margin-top: 8px; }
+.zeile2 .wahl { flex: 1; min-width: 0; text-align: left; padding: 2px 0; }
+.zeile2 .wahl b { display: block; font-weight: 600; }
+.zeile2 .wahl .klein { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plusk { width: 40px; height: 40px; flex: none; border-radius: 50%; background: var(--flaeche); color: var(--akzent); font-size: 26px; line-height: 1; }
+.zutat { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--linie); }
+.zutat .zn { flex: 1; min-width: 0; }
+.zutat input { width: 84px; text-align: right; }
+.cam { position: relative; border-radius: 14px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; margin-bottom: 10px; }
+.cam video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cam i { position: absolute; left: 12%; right: 12%; top: 38%; bottom: 38%; border: 2px solid var(--akzent); border-radius: 8px; }
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 22px; font-size: 15px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 60; max-width: calc(100vw - 32px); }
+.toast.an { opacity: 1; transform: translate(-50%, 0); }
+.gew { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.gew b { display: block; font-size: 22px; }
+@media (max-width: 520px) {
+  dialog { width: 100vw; max-width: 100vw; margin: auto 0 0; border: 0; border-radius: 18px 18px 0 0; }
+}
+</style>
+</head>
+<body>
+<header class="kopf" id="kopf"></header>
+<main class="wrap" id="app"></main>
+<nav id="nav"></nav>
+<dialog id="dlg"></dialog>
+<div id="tip"></div>
+<input type="file" id="datei" accept=".json,application/json" hidden>
+
+<script>
+'use strict';
+/* ---------- Lebensmittel: Richtwerte je 100 g / 100 ml ---------- */
+function L(name, kat, kcal, e, k, f, pn, pg, einh) { return { name, kat, kcal, e, k, f, pn: pn || null, pg: pg || null, einh: einh || 'g' }; }
+const GRUND = [
+  L('Whey Protein (Pulver)', 'Eiweiß & Sport', 400, 78, 8, 6, 'Messlöffel', 30),
+  /* Herstellerangaben je 100 g Pulver: Rühl24-Produktseite (Tabelle für aromatisierte Sorten), ESN von der Packung (Stand 11/2026) */
+  L('Rühls Bestes Whey Konzentrat Kirsche', 'Eiweiß & Sport', 378, 75, 5.9, 5.9, 'Messlöffel', 30),
+  L('ESN Designer Rice Pudding (Pulver)', 'Eiweiß & Sport', 365, 8, 81, 1, 'Portion', 60),
+  L('Kollagen (Pulver)', 'Eiweiß & Sport', 360, 90, 0, 0, 'Messlöffel', 10),
+  L('Proteinriegel', 'Eiweiß & Sport', 360, 33, 30, 12, 'Riegel', 60),
+  L('Proteinpudding', 'Eiweiß & Sport', 80, 10, 7, 1.5, 'Becher', 200),
+  L('Skyr natur', 'Eiweiß & Sport', 65, 11, 4, 0.2, 'Becher', 150),
+  L('Magerquark', 'Eiweiß & Sport', 68, 12, 4, 0.3, 'Becher', 250),
+  L('Körniger Frischkäse', 'Eiweiß & Sport', 98, 12, 2.7, 4.3, 'Becher', 200),
+
+  L('Hähnchenbrust, gegart', 'Fleisch & Fisch', 150, 30, 0, 3),
+  L('Hähnchenbrust, roh', 'Fleisch & Fisch', 110, 23, 0, 1.5),
+  L('Putenbrust, gegart', 'Fleisch & Fisch', 145, 30, 0, 2),
+  L('Rinderhack, gebraten', 'Fleisch & Fisch', 250, 26, 0, 16),
+  L('Rindersteak, gebraten', 'Fleisch & Fisch', 190, 28, 0, 8),
+  L('Schweineschnitzel, natur', 'Fleisch & Fisch', 170, 28, 0, 6),
+  L('Schnitzel, paniert', 'Fleisch & Fisch', 260, 19, 15, 13, 'Stück', 180),
+  L('Bratwurst', 'Fleisch & Fisch', 310, 13, 1, 28, 'Stück', 120),
+  L('Kochschinken', 'Fleisch & Fisch', 115, 20, 1, 3.5, 'Scheibe', 30),
+  L('Salami', 'Fleisch & Fisch', 450, 21, 1, 40, 'Scheibe', 10),
+  L('Putenbrust-Aufschnitt', 'Fleisch & Fisch', 105, 20, 1.5, 2, 'Scheibe', 25),
+  L('Lachs, gegart', 'Fleisch & Fisch', 205, 22, 0, 13),
+  L('Thunfisch in Wasser', 'Fleisch & Fisch', 110, 25, 0, 1, 'Dose', 130),
+  L('Seelachs, gegart', 'Fleisch & Fisch', 100, 22, 0, 1),
+
+  L('Ei', 'Milch & Ei', 155, 13, 1, 11, 'Stück', 60),
+  L('Vollmilch 3,5 %', 'Milch & Ei', 64, 3.3, 4.8, 3.5, 'Glas', 200, 'ml'),
+  L('Milch 1,5 %', 'Milch & Ei', 47, 3.4, 4.9, 1.5, 'Glas', 200, 'ml'),
+  L('Joghurt natur 3,5 %', 'Milch & Ei', 66, 3.8, 4.7, 3.5, 'Becher', 150),
+  L('Fruchtjoghurt', 'Milch & Ei', 95, 3.5, 14, 2.8, 'Becher', 150),
+  L('Gouda', 'Milch & Ei', 360, 25, 0, 29, 'Scheibe', 25),
+  L('Mozzarella', 'Milch & Ei', 250, 19, 1, 19, 'Kugel', 125),
+  L('Feta', 'Milch & Ei', 265, 16, 1, 22),
+  L('Parmesan', 'Milch & Ei', 400, 35, 0, 29, 'EL', 10),
+  L('Butter', 'Milch & Ei', 740, 0.7, 0.6, 82, 'Portion', 10),
+
+  L('Haferflocken', 'Brot & Getreide', 370, 13, 59, 7, 'Portion', 60),
+  L('Müsli (ohne Zucker)', 'Brot & Getreide', 365, 11, 60, 8, 'Portion', 60),
+  L('Vollkornbrot', 'Brot & Getreide', 215, 7.5, 40, 1.5, 'Scheibe', 50),
+  L('Mischbrot', 'Brot & Getreide', 240, 7, 47, 1.5, 'Scheibe', 50),
+  L('Toast', 'Brot & Getreide', 265, 8, 49, 3.5, 'Scheibe', 25),
+  L('Brötchen', 'Brot & Getreide', 270, 9, 54, 1.5, 'Stück', 60),
+  L('Vollkornbrötchen', 'Brot & Getreide', 245, 10, 44, 2.5, 'Stück', 70),
+  L('Laugenbrezel', 'Brot & Getreide', 285, 8, 57, 2.5, 'Stück', 85),
+  L('Reis, gekocht', 'Brot & Getreide', 130, 2.7, 28, 0.3),
+  L('Reis, roh', 'Brot & Getreide', 350, 7, 78, 0.6, 'Portion', 75),
+  L('Nudeln, gekocht', 'Brot & Getreide', 150, 5.5, 30, 1),
+  L('Nudeln, roh', 'Brot & Getreide', 355, 12, 71, 1.5, 'Portion', 100),
+  L('Milchreis, gekocht', 'Brot & Getreide', 118, 3.3, 21, 2, 'Portion', 250),
+  L('Kartoffeln, gekocht', 'Brot & Getreide', 75, 2, 16, 0.1, 'Stück', 80),
+  L('Bratkartoffeln', 'Brot & Getreide', 150, 3, 23, 5),
+  L('Pommes frites', 'Brot & Getreide', 290, 3.5, 36, 14, 'Portion', 150),
+  L('Reiswaffel', 'Brot & Getreide', 385, 8, 81, 3, 'Stück', 8),
+  L('Wrap / Tortilla', 'Brot & Getreide', 300, 8, 50, 7, 'Stück', 60),
+
+  L('Apfel', 'Obst', 54, 0.3, 12, 0.2, 'Stück', 150),
+  L('Banane', 'Obst', 95, 1.1, 21, 0.2, 'Stück', 120),
+  L('Birne', 'Obst', 55, 0.4, 12, 0.3, 'Stück', 160),
+  L('Orange', 'Obst', 47, 1, 9, 0.2, 'Stück', 180),
+  L('Mandarine', 'Obst', 50, 0.7, 10, 0.3, 'Stück', 70),
+  L('Kiwi', 'Obst', 60, 1, 11, 0.6, 'Stück', 75),
+  L('Erdbeeren', 'Obst', 32, 0.8, 5.5, 0.4, 'Handvoll', 100),
+  L('Heidelbeeren', 'Obst', 42, 0.7, 7.5, 0.6, 'Handvoll', 80),
+  L('Himbeeren', 'Obst', 36, 1.2, 4.8, 0.65, 'Handvoll', 80),
+  L('Weintrauben', 'Obst', 70, 0.7, 16, 0.3, 'Handvoll', 100),
+  L('Ananas', 'Obst', 55, 0.5, 12, 0.2),
+  L('Wassermelone', 'Obst', 30, 0.6, 7, 0.2),
+
+  L('Tomate', 'Gemüse', 18, 1, 2.6, 0.2, 'Stück', 100),
+  L('Gurke', 'Gemüse', 14, 0.7, 2, 0.2),
+  L('Paprika', 'Gemüse', 30, 1, 5, 0.3, 'Stück', 160),
+  L('Möhre', 'Gemüse', 35, 1, 6, 0.2, 'Stück', 80),
+  L('Brokkoli', 'Gemüse', 34, 3.5, 3, 0.4),
+  L('Blumenkohl', 'Gemüse', 25, 2.5, 2.5, 0.3),
+  L('Zucchini', 'Gemüse', 20, 1.5, 2, 0.4),
+  L('Champignons', 'Gemüse', 22, 2.7, 0.6, 0.3),
+  L('Spinat', 'Gemüse', 23, 2.7, 0.6, 0.4),
+  L('Salat, gemischt', 'Gemüse', 18, 1.3, 2, 0.2, 'Schale', 100),
+  L('Zwiebel', 'Gemüse', 40, 1.2, 8, 0.2, 'Stück', 80),
+  L('Mais (Dose)', 'Gemüse', 85, 3, 15, 1.2),
+  L('Kidneybohnen (Dose)', 'Gemüse', 105, 7, 16, 0.6),
+  L('Linsen, gekocht', 'Gemüse', 115, 9, 17, 0.4),
+  L('Kichererbsen (Dose)', 'Gemüse', 130, 7, 17, 3),
+  L('Avocado', 'Gemüse', 160, 2, 3.5, 15, 'halbe', 70),
+
+  L('Olivenöl', 'Fett & Nüsse', 884, 0, 0, 100, 'EL', 10),
+  L('Rapsöl', 'Fett & Nüsse', 884, 0, 0, 100, 'EL', 10),
+  L('Erdnussbutter', 'Fett & Nüsse', 610, 26, 16, 49, 'EL', 15),
+  L('Mandeln', 'Fett & Nüsse', 590, 21, 7, 52, 'Handvoll', 30),
+  L('Walnüsse', 'Fett & Nüsse', 680, 15, 7, 65, 'Handvoll', 30),
+  L('Erdnüsse, geröstet', 'Fett & Nüsse', 590, 26, 11, 49, 'Handvoll', 30),
+
+  L('Honig', 'Aufstrich & Soße', 305, 0.4, 76, 0, 'TL', 10),
+  L('Marmelade', 'Aufstrich & Soße', 250, 0.4, 60, 0.1, 'TL', 15),
+  L('Nuss-Nougat-Creme', 'Aufstrich & Soße', 540, 6, 57, 31, 'TL', 15),
+  L('Frischkäse', 'Aufstrich & Soße', 240, 6, 3.5, 23, 'EL', 30),
+  L('Ketchup', 'Aufstrich & Soße', 105, 1.5, 24, 0.1, 'EL', 15),
+  L('Mayonnaise', 'Aufstrich & Soße', 680, 1, 2, 75, 'EL', 15),
+  L('Senf', 'Aufstrich & Soße', 90, 6, 6, 4.5, 'TL', 10),
+  L('Tomatensoße', 'Aufstrich & Soße', 60, 1.7, 8, 2, 'Portion', 150),
+  L('Zucker', 'Aufstrich & Soße', 400, 0, 100, 0, 'TL', 5),
+
+  L('Pizza Margherita', 'Fertig & Unterwegs', 245, 10, 32, 8, 'Pizza', 350),
+  L('Döner Kebab', 'Fertig & Unterwegs', 215, 12, 20, 9, 'Stück', 400),
+  L('Burger', 'Fertig & Unterwegs', 255, 13, 25, 11, 'Stück', 220),
+  L('Currywurst', 'Fertig & Unterwegs', 260, 10, 11, 20, 'Portion', 200),
+  L('Belegtes Brötchen', 'Fertig & Unterwegs', 245, 11, 28, 9, 'Stück', 130),
+  L('Lasagne', 'Fertig & Unterwegs', 150, 8, 12, 7.5, 'Portion', 350),
+  L('Gulasch', 'Fertig & Unterwegs', 125, 14, 4, 6, 'Portion', 250),
+  L('Eintopf', 'Fertig & Unterwegs', 75, 4.5, 8, 2.5, 'Teller', 350),
+
+  L('Schokolade', 'Süßes & Snacks', 540, 7, 57, 31, 'Riegel (4 Stk.)', 25),
+  L('Gummibärchen', 'Süßes & Snacks', 340, 7, 77, 0.2, 'Handvoll', 30),
+  L('Kekse', 'Süßes & Snacks', 480, 7, 67, 20, 'Stück', 12),
+  L('Kuchen', 'Süßes & Snacks', 350, 5, 48, 16, 'Stück', 100),
+  L('Eis', 'Süßes & Snacks', 210, 3.5, 25, 10, 'Kugel', 60),
+  L('Chips', 'Süßes & Snacks', 535, 6, 50, 34, 'Handvoll', 25),
+
+  L('Apfelsaft', 'Getränke', 46, 0.1, 11, 0.1, 'Glas', 250, 'ml'),
+  L('Orangensaft', 'Getränke', 45, 0.7, 9, 0.2, 'Glas', 250, 'ml'),
+  L('Apfelschorle', 'Getränke', 25, 0, 6, 0, 'Glas', 400, 'ml'),
+  L('Limonade', 'Getränke', 42, 0, 10, 0, 'Glas', 330, 'ml'),
+  L('Isodrink', 'Getränke', 26, 0, 6, 0, 'Flasche', 500, 'ml'),
+];
+/* Vitamine & Mineralstoffe je 100 g, aus der USDA-Datenbank (SR Legacy) erzeugt — nicht von Hand ändern */
+/*MIKRO_ANFANG*/
+const MIKRO = {
+"Whey Protein (Pulver)": {bal:3.1,ca:469,fe:1.13,mgn:195,ph:1321,kal:500,zn:6.18,cu:0.05,se:26.7,b1:0.61,b2:2.02,b3:1.14,b5:5.52,b6:0.61,fol:33,b12:2.45,gesf:0.78,salz:0.39},
+"Kollagen (Pulver)": {ca:55,fe:1.11,mgn:22,ph:39,kal:16,zn:0.14,cu:2.16,mn:0.11,se:39.5,b1:0.03,b2:0.23,b3:0.09,b5:0.13,b6:0.01,fol:30,gesf:0.07,salz:0.49},
+"Proteinriegel": {bal:5.7,ca:504,fe:11.7,mgn:248,ph:614,kal:362,zn:9.96,cu:1.43,mn:1.61,se:7.8,ve:8.28,vc:92.3,b1:8.06,b2:1.92,b3:32.6,b5:15.9,b6:2.2,fol:615,b12:5.6,vk:1.1,gesf:1.32,zuk:30.1,salz:0.77},
+"Proteinpudding": {bal:0.3,ca:39,fe:1.69,mgn:15,ph:54,kal:208,zn:0.3,cu:0.08,mn:0.08,se:1.6,b1:0.02,b2:0.07,b3:0.09,b5:0.15,b6:0.02,fol:3,b12:0.15,vk:0.1,zuk:15.8,salz:0.39},
+"Skyr natur": {ca:110,fe:0.07,mgn:11,ph:135,kal:141,zn:0.52,cu:0.02,mn:0.01,se:9.7,va:1,ve:0.01,b1:0.02,b2:0.28,b3:0.21,b5:0.33,b6:0.06,fol:7,b12:0.75,gesf:0.12,zuk:3.24,salz:0.09},
+"Magerquark": {ca:86,fe:0.15,mgn:11,ph:190,kal:137,zn:0.47,cu:0.03,mn:0.02,se:9.4,va:2,ve:0.01,b1:0.02,b2:0.23,b3:0.14,b5:0.45,b6:0.02,fol:9,b12:0.46,gesf:0.17,zuk:1.85,salz:0.93},
+"Körniger Frischkäse": {ca:111,fe:0.13,mgn:9,ph:150,kal:125,zn:0.51,cu:0.03,mn:0.02,se:11.9,va:68,ve:0.08,b1:0.02,b2:0.25,b3:0.1,b5:0.52,b6:0.06,fol:8,b12:0.47,gesf:1.24,zuk:4,salz:0.77},
+"Hähnchenbrust, gegart": {ca:15,fe:1.04,mgn:29,ph:228,kal:256,zn:1,cu:0.05,mn:0.02,se:27.6,va:6,ve:0.27,vd:0.1,b1:0.07,b2:0.11,b3:13.7,b5:0.97,b6:0.6,fol:4,b12:0.34,vk:0.3,gesf:1.01,salz:0.19},
+"Hähnchenbrust, roh": {ca:5,fe:0.37,mgn:28,ph:213,kal:334,zn:0.68,cu:0.04,mn:0.01,se:22.8,va:9,ve:0.56,b1:0.09,b2:0.18,b3:9.6,b5:1.5,b6:0.81,fol:9,b12:0.21,gesf:0.56,salz:0.11},
+"Putenbrust, gegart": {ca:9,fe:0.71,mgn:32,ph:230,kal:249,zn:1.72,cu:0.06,mn:0.01,se:30.2,va:3,ve:0.06,vd:0.3,b1:0.04,b2:0.21,b3:11.8,b5:0.9,b6:0.81,fol:9,b12:0.39,gesf:0.59,salz:0.25},
+"Rinderhack, gebraten": {ca:18,fe:2.6,mgn:21,ph:198,kal:318,zn:6.31,cu:0.09,mn:0.01,se:21.5,va:3,ve:0.12,b1:0.05,b2:0.18,b3:5.38,b5:0.66,b6:0.38,fol:9,b12:2.64,vk:1.2,gesf:5.9,salz:0.18},
+"Rindersteak, gebraten": {ca:17,fe:2.07,mgn:26,ph:237,kal:380,zn:5.75,cu:0.1,mn:0.01,se:35.1,ve:0.4,b1:0.08,b2:0.16,b3:8.94,b5:0.6,b6:0.63,fol:10,b12:1.89,vk:1.4,gesf:2.5,salz:0.16},
+"Schweineschnitzel, natur": {ca:5,fe:0.63,mgn:27,ph:237,kal:367,zn:2.15,cu:0.08,mn:0.01,se:45.3,ve:0.1,vd:0.6,b1:0.66,b2:0.2,b3:8.51,b5:0.69,b6:0.72,b12:0.56,gesf:2.08,salz:0.11},
+"Schnitzel, paniert": {bal:0.9,ca:11,fe:0.83,mgn:24,ph:272,kal:251,zn:0.59,cu:0.05,mn:0.15,se:17.2,va:5,ve:1.12,vd:0.2,vc:0.6,b1:0.09,b2:0.2,b3:5.99,b5:1.18,b6:0.15,fol:11,b12:0.33,vk:7,gesf:3.57,zuk:0.08,salz:1.49},
+"Bratwurst": {ca:28,fe:0.53,mgn:21,ph:208,kal:348,zn:3.25,cu:0.1,mn:0.01,se:39.7,va:2,ve:0.26,vd:1.1,b1:0.46,b2:0.31,b3:4.8,b5:0.67,b6:0.33,fol:3,b12:0.73,vk:3.4,gesf:10,salz:2.12},
+"Kochschinken": {bal:1.3,ca:24,fe:1.02,mgn:22,ph:153,kal:287,zn:1.35,cu:0.09,mn:0.56,se:20.7,ve:0.08,vd:0.7,vc:4,b1:0.63,b2:0.18,b3:2.9,b5:0.44,b6:0.33,fol:7,b12:0.42,gesf:0.5,zuk:1,salz:2.04},
+"Salami": {ca:24,fe:1.36,mgn:20,ph:192,kal:363,zn:2.67,cu:0.1,mn:0.95,se:33.6,va:11,ve:0.64,vd:0.9,b1:0.39,b2:0.2,b3:6.11,b5:1.01,b6:0.44,b12:1.15,gesf:11.4,zuk:0.26,salz:4.39},
+"Putenbrust-Aufschnitt": {bal:0.5,ca:8,fe:0.63,mgn:21,ph:162,kal:211,zn:1.33,cu:0.06,mn:0.02,se:22.8,va:10,ve:0.09,vd:0.1,vc:5.7,b1:0.13,b2:0.32,b3:0.11,b5:0.17,b6:0.13,fol:4,b12:0.09,gesf:0.2,zuk:3.51,salz:1.93},
+"Lachs, gegart": {ca:15,fe:0.34,mgn:30,ph:252,kal:384,zn:0.43,cu:0.05,mn:0.02,se:41.4,va:69,ve:1.14,vd:13.1,vc:3.7,b1:0.34,b2:0.14,b3:8.05,b5:1.48,b6:0.65,fol:34,b12:2.8,vk:0.1,gesf:2.4,salz:0.15},
+"Thunfisch in Wasser": {ca:17,fe:1.63,mgn:23,ph:139,kal:179,zn:0.69,cu:0.05,mn:0.02,se:70.6,va:17,ve:0.33,vd:1.2,b1:0.03,b2:0.08,b3:10.1,b5:0.15,b6:0.32,fol:4,b12:2.55,vk:0.2,gesf:0.21,salz:0.62},
+"Seelachs, gegart": {ca:77,fe:0.59,mgn:86,ph:283,kal:456,zn:0.6,cu:0.06,mn:0.02,se:46.8,va:12,b1:0.05,b2:0.23,b3:3.98,b5:0.41,b6:0.33,fol:3,b12:3.68,gesf:0.17,salz:0.28},
+"Ei": {ca:56,fe:1.75,mgn:12,ph:198,kal:138,zn:1.29,cu:0.07,mn:0.03,se:30.7,va:160,ve:1.05,vd:2,b1:0.04,b2:0.46,b3:0.08,b5:1.53,b6:0.17,fol:47,b12:0.89,vk:0.3,gesf:3.13,zuk:0.37,salz:0.36},
+"Vollmilch 3,5 %": {ca:113,fe:0.03,mgn:10,ph:84,kal:132,zn:0.37,cu:0.03,mn:0,se:3.7,va:46,ve:0.07,vd:1.3,b1:0.05,b2:0.17,b3:0.09,b5:0.37,b6:0.04,fol:5,b12:0.45,vk:0.3,gesf:1.87,zuk:5.05,salz:0.11},
+"Milch 1,5 %": {ca:125,fe:0.03,mgn:11,ph:95,kal:150,zn:0.42,cu:0.01,mn:0,se:3.3,va:58,ve:0.01,vd:1.2,b1:0.02,b2:0.19,b3:0.09,b5:0.36,b6:0.04,fol:5,b12:0.47,vk:0.1,gesf:0.63,zuk:5.2,salz:0.11},
+"Joghurt natur 3,5 %": {ca:121,fe:0.05,mgn:12,ph:95,kal:155,zn:0.59,cu:0.01,mn:0,se:2.2,va:27,ve:0.06,vd:0.1,vc:0.5,b1:0.03,b2:0.14,b3:0.08,b5:0.39,b6:0.03,fol:7,b12:0.37,vk:0.2,gesf:2.1,zuk:4.66,salz:0.12},
+"Fruchtjoghurt": {ca:138,fe:0.06,mgn:13,ph:109,kal:177,zn:0.67,cu:0.08,mn:0.06,se:2.8,va:11,ve:0.02,vc:0.6,b1:0.03,b2:0.16,b3:0.09,b5:0.45,b6:0.04,fol:9,b12:0.43,vk:0.1,gesf:0.74,zuk:18.6,salz:0.13},
+"Gouda": {ca:700,fe:0.24,mgn:29,ph:546,kal:121,zn:3.9,cu:0.04,mn:0.01,se:14.5,va:165,ve:0.24,vd:0.5,b1:0.03,b2:0.33,b3:0.06,b5:0.34,b6:0.08,fol:21,b12:1.54,vk:2.3,gesf:17.6,zuk:2.22,salz:2.05},
+"Mozzarella": {ca:505,fe:0.44,mgn:20,ph:354,kal:76,zn:2.92,cu:0.01,mn:0.03,se:17,va:179,ve:0.19,vd:0.4,b1:0.03,b2:0.28,b3:0.1,b5:0.14,b6:0.04,fol:7,b12:2.28,vk:2.3,gesf:13.9,salz:1.22},
+"Feta": {ca:493,fe:0.65,mgn:19,ph:337,kal:62,zn:2.88,cu:0.03,mn:0.03,se:15,va:125,ve:0.18,vd:0.4,b1:0.15,b2:0.84,b3:0.99,b5:0.97,b6:0.42,fol:32,b12:1.69,vk:1.8,gesf:13.3,salz:2.85},
+"Parmesan": {ca:853,fe:0.49,mgn:34,ph:627,kal:180,zn:4.2,cu:0.04,mn:0.07,se:34.4,va:262,ve:0.53,vd:0.5,b1:0.03,b2:0.36,b3:0.08,b5:0.45,b6:0.08,fol:6,b12:1.4,vk:1.7,gesf:15.4,zuk:0.07,salz:4.51},
+"Butter": {ca:24,fe:0.02,mgn:2,ph:24,kal:24,zn:0.09,cu:0.02,mn:0,se:1,va:684,ve:2.32,b1:0.01,b2:0.03,b3:0.04,b5:0.11,b6:0,fol:3,b12:0.17,vk:7,gesf:50.5,zuk:0.06,salz:0.03},
+"Haferflocken": {bal:10.1,ca:52,fe:4.25,mgn:138,ph:410,kal:362,zn:3.64,cu:0.39,mn:3.63,se:28.9,ve:0.42,b1:0.46,b2:0.16,b3:1.13,b5:1.12,b6:0.1,fol:32,vk:2,gesf:1.11,zuk:0.99,salz:0.02},
+"Müsli (ohne Zucker)": {bal:8.9,ca:76,fe:3.95,mgn:168,ph:431,kal:539,zn:4.17,cu:0.65,mn:4,se:25.4,va:1,ve:11.1,vc:1.2,b1:0.55,b2:0.35,b3:2.74,b5:0.75,b6:0.37,fol:84,vk:5.3,gesf:3.96,zuk:19.8,salz:0.07},
+"Vollkornbrot": {bal:6,ca:161,fe:2.47,mgn:75,ph:212,kal:254,zn:1.77,cu:0.23,mn:2.17,se:25.7,ve:2.66,b1:0.39,b2:0.17,b3:4.44,b5:0.65,b6:0.22,fol:42,vk:7.8,gesf:0.72,zuk:4.34,salz:1.14},
+"Mischbrot": {bal:5.8,ca:73,fe:2.83,mgn:40,ph:125,kal:166,zn:1.14,cu:0.19,mn:0.82,se:30.9,ve:0.33,vc:0.4,b1:0.43,b2:0.34,b3:3.81,b5:0.44,b6:0.08,fol:110,vk:1.2,gesf:0.63,zuk:3.85,salz:1.51},
+"Toast": {bal:2.7,ca:144,fe:3.61,mgn:23,ph:98,kal:126,zn:0.74,cu:0.1,mn:0.54,se:22,ve:0.22,b1:0.53,b2:0.24,b3:4.78,b5:0.54,b6:0.09,fol:111,vk:0.2,gesf:0.7,zuk:5.67,salz:1.23},
+"Brötchen": {bal:2.3,ca:95,fe:3.28,mgn:27,ph:100,kal:108,zn:0.94,cu:0.16,mn:0.46,se:39.1,ve:0.42,b1:0.48,b2:0.34,b3:4.24,b5:0.41,b6:0.04,fol:95,vk:0.6,gesf:0.61,zuk:1.77,salz:1.36},
+"Vollkornbrötchen": {bal:7.5,ca:106,fe:2.42,mgn:85,ph:224,kal:272,zn:2.01,cu:0.24,mn:2.3,se:49.4,ve:0.9,b1:0.25,b2:0.15,b3:3.68,b5:0.49,b6:0.2,fol:30,vk:2,gesf:0.84,zuk:8.46,salz:1.3},
+"Laugenbrezel": {bal:1.7,ca:23,fe:3.92,mgn:21,ph:79,kal:88,zn:0.94,cu:0.13,se:17.2,ve:0.54,b1:0.41,b2:0.29,b3:4.27,b6:0.02,fol:24,vk:2.7,gesf:0.7,zuk:0.25,salz:0.51},
+"Reis, gekocht": {bal:0.4,ca:10,fe:0.2,mgn:12,ph:43,kal:35,zn:0.49,cu:0.07,mn:0.47,se:7.5,ve:0.04,b1:0.02,b2:0.01,b3:0.4,b5:0.39,b6:0.09,fol:3,gesf:0.08,zuk:0.05},
+"Reis, roh": {bal:1.3,ca:28,fe:0.8,mgn:25,ph:115,kal:115,zn:1.09,cu:0.22,mn:1.09,se:15.1,ve:0.11,b1:0.07,b2:0.05,b3:1.6,b5:1.01,b6:0.16,fol:8,vk:0.1,gesf:0.18,zuk:0.12,salz:0.01},
+"Nudeln, gekocht": {bal:1.8,ca:7,fe:0.5,mgn:18,ph:58,kal:44,zn:0.51,cu:0.1,mn:0.32,se:26.4,ve:0.06,b1:0.02,b2:0.02,b3:0.4,b5:0.11,b6:0.05,fol:7,gesf:0.18,zuk:0.56},
+"Nudeln, roh": {bal:3.2,ca:21,fe:1.3,mgn:53,ph:189,kal:223,zn:1.41,cu:0.29,mn:0.92,se:63.2,ve:0.11,b1:0.09,b2:0.06,b3:1.7,b5:0.43,b6:0.14,fol:18,vk:0.1,gesf:0.28,zuk:2.67,salz:0.02},
+"Kartoffeln, gekocht": {bal:1.8,ca:8,fe:0.31,mgn:20,ph:40,kal:328,zn:0.27,cu:0.17,mn:0.14,se:0.3,ve:0.01,vc:7.4,b1:0.1,b2:0.02,b3:1.31,b5:0.51,b6:0.27,fol:9,vk:2.2,gesf:0.03,zuk:0.89,salz:0.01},
+"Bratkartoffeln": {bal:3.2,ca:14,fe:0.55,mgn:35,ph:70,kal:576,zn:0.47,cu:0.29,mn:0.25,se:0.5,ve:0.01,vc:13,b1:0.17,b2:0.03,b3:2.3,b5:0.89,b6:0.47,fol:16,vk:3.7,gesf:1.88,zuk:1.49,salz:0.86},
+"Pommes frites": {bal:3.8,ca:18,fe:0.81,mgn:35,ph:125,kal:579,zn:0.5,cu:0.12,mn:0.25,se:0.9,ve:1.67,vc:4.7,b1:0.17,b2:0.04,b3:3,b5:0.58,b6:0.37,fol:30,vk:11.2,gesf:2.34,zuk:0.3,salz:0.53},
+"Reiswaffel": {bal:4.2,ca:11,fe:1.49,mgn:131,ph:360,kal:290,zn:3,cu:0.45,mn:3.73,se:24.6,ve:1.24,b1:0.06,b2:0.17,b3:7.81,b5:1,b6:0.15,fol:21,vk:1.9,gesf:0.57,zuk:0.88,salz:0.07},
+"Wrap / Tortilla": {bal:3.5,ca:146,fe:3.63,mgn:22,ph:206,kal:125,zn:0.53,cu:0.1,mn:0.54,se:22.3,b1:0.5,b2:0.28,b3:4.42,b5:0.56,b6:0.06,fol:94,vk:7.2,gesf:2.92,zuk:3.71,salz:1.84},
+"Himbeeren": {bal:6.5,ca:25,fe:0.69,mgn:22,ph:29,kal:151,zn:0.42,cu:0.09,mn:0.67,se:0.2,va:2,ve:0.87,vc:26.2,b1:0.03,b2:0.04,b3:0.6,b5:0.33,b6:0.06,fol:21,vk:7.8,gesf:0.02,zuk:4.42},
+"Milchreis, gekocht": {bal:0.1,ca:103,fe:0.37,mgn:13,ph:85,kal:128,zn:0.38,cu:0.02,mn:0.06,se:1.8,va:29,vd:0.8,vc:0.7,b1:0.07,b2:0.14,b3:0.44,b5:0.28,b6:0.03,fol:4,b12:0.24,gesf:1.68,salz:0.27},
+"Apfel": {bal:2.4,ca:6,fe:0.12,mgn:5,ph:11,kal:107,zn:0.04,cu:0.03,mn:0.04,va:3,ve:0.18,vc:4.6,b1:0.02,b2:0.03,b3:0.09,b5:0.06,b6:0.04,fol:3,vk:2.2,gesf:0.03,zuk:10.4},
+"Banane": {bal:2.6,ca:5,fe:0.26,mgn:27,ph:22,kal:358,zn:0.15,cu:0.08,mn:0.27,se:1,va:3,ve:0.1,vc:8.7,b1:0.03,b2:0.07,b3:0.67,b5:0.33,b6:0.37,fol:20,vk:0.5,gesf:0.11,zuk:12.2},
+"Birne": {bal:3.1,ca:9,fe:0.18,mgn:7,ph:12,kal:116,zn:0.1,cu:0.08,mn:0.05,se:0.1,va:1,ve:0.12,vc:4.3,b1:0.01,b2:0.03,b3:0.16,b5:0.05,b6:0.03,fol:7,vk:4.4,gesf:0.02,zuk:9.75},
+"Orange": {bal:2.4,ca:40,fe:0.1,mgn:10,ph:14,kal:181,zn:0.07,cu:0.05,mn:0.03,se:0.5,va:11,ve:0.18,vc:53.2,b1:0.09,b2:0.04,b3:0.28,b5:0.25,b6:0.06,fol:30,gesf:0.02,zuk:9.35},
+"Mandarine": {bal:1.8,ca:37,fe:0.15,mgn:12,ph:20,kal:166,zn:0.07,cu:0.04,mn:0.04,se:0.1,va:34,ve:0.2,vc:26.7,b1:0.06,b2:0.04,b3:0.38,b5:0.22,b6:0.08,fol:16,gesf:0.04,zuk:10.6,salz:0.01},
+"Kiwi": {bal:3,ca:34,fe:0.31,mgn:17,ph:34,kal:312,zn:0.14,cu:0.13,mn:0.1,se:0.2,va:4,ve:1.46,vc:92.7,b1:0.03,b2:0.03,b3:0.34,b5:0.18,b6:0.06,fol:25,vk:40.3,gesf:0.03,zuk:8.99,salz:0.01},
+"Erdbeeren": {bal:2,ca:16,fe:0.41,mgn:13,ph:24,kal:153,zn:0.14,cu:0.05,mn:0.39,se:0.4,va:1,ve:0.29,vc:58.8,b1:0.02,b2:0.02,b3:0.39,b5:0.13,b6:0.05,fol:24,vk:2.2,gesf:0.02,zuk:4.89},
+"Heidelbeeren": {bal:2.4,ca:6,fe:0.28,mgn:6,ph:12,kal:77,zn:0.16,cu:0.06,mn:0.34,se:0.1,va:3,ve:0.57,vc:9.7,b1:0.04,b2:0.04,b3:0.42,b5:0.12,b6:0.05,fol:6,vk:19.3,gesf:0.03,zuk:9.96},
+"Weintrauben": {bal:0.9,ca:10,fe:0.36,mgn:7,ph:20,kal:191,zn:0.07,cu:0.13,mn:0.07,se:0.1,va:3,ve:0.19,vc:3.2,b1:0.07,b2:0.07,b3:0.19,b5:0.05,b6:0.09,fol:2,vk:14.6,gesf:0.05,zuk:15.5,salz:0.01},
+"Ananas": {bal:1.4,ca:13,fe:0.29,mgn:12,ph:8,kal:109,zn:0.12,cu:0.11,mn:0.93,se:0.1,va:3,ve:0.02,vc:47.8,b1:0.08,b2:0.03,b3:0.5,b5:0.21,b6:0.11,fol:18,vk:0.7,gesf:0.01,zuk:9.85},
+"Wassermelone": {bal:0.4,ca:7,fe:0.24,mgn:10,ph:11,kal:112,zn:0.1,cu:0.04,mn:0.04,se:0.4,va:28,ve:0.05,vc:8.1,b1:0.03,b2:0.02,b3:0.18,b5:0.22,b6:0.05,fol:3,vk:0.1,gesf:0.02,zuk:6.2},
+"Tomate": {bal:1.2,ca:10,fe:0.27,mgn:11,ph:24,kal:237,zn:0.17,cu:0.06,mn:0.11,va:42,ve:0.54,vc:13.7,b1:0.04,b2:0.02,b3:0.59,b5:0.09,b6:0.08,fol:15,vk:7.9,gesf:0.03,zuk:2.63,salz:0.01},
+"Gurke": {bal:0.5,ca:16,fe:0.28,mgn:13,ph:24,kal:147,zn:0.2,cu:0.04,mn:0.08,se:0.3,va:5,ve:0.03,vc:2.8,b1:0.03,b2:0.03,b3:0.1,b5:0.26,b6:0.04,fol:7,vk:16.4,gesf:0.04,zuk:1.67,salz:0.01},
+"Paprika": {bal:2.1,ca:7,fe:0.43,mgn:12,ph:26,kal:211,zn:0.25,cu:0.02,mn:0.11,se:0.1,va:157,ve:1.58,vc:128,b1:0.05,b2:0.09,b3:0.98,b5:0.32,b6:0.29,fol:46,vk:4.9,gesf:0.06,zuk:4.2,salz:0.01},
+"Möhre": {bal:2.8,ca:33,fe:0.3,mgn:12,ph:35,kal:320,zn:0.24,cu:0.05,mn:0.14,se:0.1,va:835,ve:0.66,vc:5.9,b1:0.07,b2:0.06,b3:0.98,b5:0.27,b6:0.14,fol:19,vk:13.2,gesf:0.03,zuk:4.74,salz:0.17},
+"Brokkoli": {bal:2.6,ca:47,fe:0.73,mgn:21,ph:66,kal:316,zn:0.41,cu:0.05,mn:0.21,se:2.5,va:31,ve:0.78,vc:89.2,b1:0.07,b2:0.12,b3:0.64,b5:0.57,b6:0.18,fol:63,vk:102,gesf:0.11,zuk:1.7,salz:0.08},
+"Blumenkohl": {bal:2,ca:22,fe:0.42,mgn:15,ph:44,kal:299,zn:0.27,cu:0.04,mn:0.16,se:0.6,ve:0.08,vc:48.2,b1:0.05,b2:0.06,b3:0.51,b5:0.67,b6:0.18,fol:57,vk:15.5,gesf:0.13,zuk:1.91,salz:0.08},
+"Zucchini": {bal:1,ca:16,fe:0.37,mgn:18,ph:38,kal:261,zn:0.32,cu:0.05,mn:0.18,se:0.2,va:10,ve:0.12,vc:17.9,b1:0.05,b2:0.09,b3:0.45,b5:0.2,b6:0.16,fol:24,vk:4.3,gesf:0.08,zuk:2.5,salz:0.02},
+"Champignons": {bal:1,ca:3,fe:0.5,mgn:9,ph:86,kal:318,zn:0.52,cu:0.32,mn:0.05,se:9.3,ve:0.01,vd:0.2,vc:2.1,b1:0.08,b2:0.4,b3:3.61,b5:1.5,b6:0.1,fol:17,b12:0.04,gesf:0.05,zuk:1.98,salz:0.01},
+"Spinat": {bal:2.2,ca:99,fe:2.71,mgn:79,ph:49,kal:558,zn:0.53,cu:0.13,mn:0.9,se:1,va:469,ve:2.03,vc:28.1,b1:0.08,b2:0.19,b3:0.72,b5:0.07,b6:0.2,fol:194,vk:483,gesf:0.06,zuk:0.42,salz:0.2},
+"Salat, gemischt": {bal:1.3,ca:36,fe:0.86,mgn:13,ph:29,kal:194,zn:0.18,cu:0.03,mn:0.25,se:0.6,va:370,ve:0.22,vc:9.2,b1:0.07,b2:0.08,b3:0.38,b5:0.13,b6:0.09,fol:38,vk:126,gesf:0.02,zuk:0.78,salz:0.07},
+"Zwiebel": {bal:1.7,ca:23,fe:0.21,mgn:10,ph:29,kal:146,zn:0.17,cu:0.04,mn:0.13,se:0.5,ve:0.02,vc:7.4,b1:0.05,b2:0.03,b3:0.12,b5:0.12,b6:0.12,fol:19,vk:0.4,gesf:0.04,zuk:4.24,salz:0.01},
+"Mais (Dose)": {bal:2,ca:3,fe:0.27,mgn:13,ph:46,kal:132,zn:0.32,cu:0.03,mn:0.07,se:0.6,va:2,ve:0.09,vc:1.8,b1:0.04,b2:0.09,b3:1,b5:0.21,b6:0.04,fol:39,gesf:0.25,zuk:4.44,salz:0.51},
+"Kidneybohnen (Dose)": {bal:5.5,ca:57,fe:1.5,mgn:30,ph:121,kal:277,zn:0.75,cu:0.27,mn:0.38,se:1.6,vc:0.2,b1:0.07,b2:0.02,b3:0.46,fol:28,gesf:0.18,zuk:3.8,salz:0.58},
+"Linsen, gekocht": {bal:7.9,ca:19,fe:3.33,mgn:36,ph:180,kal:369,zn:1.27,cu:0.25,mn:0.49,se:2.8,ve:0.11,vc:1.5,b1:0.17,b2:0.07,b3:1.06,b5:0.64,b6:0.18,fol:181,vk:1.7,gesf:0.05,zuk:1.8,salz:0.01},
+"Kichererbsen (Dose)": {bal:6.4,ca:45,fe:1.07,mgn:26,ph:85,kal:126,zn:0.63,cu:0.25,mn:0.85,se:3.1,va:1,ve:0.29,vc:0.1,b1:0.03,b2:0.02,b3:0.14,b6:0.12,fol:48,vk:3.4,gesf:0.21,zuk:4.01,salz:0.62},
+"Avocado": {bal:6.7,ca:12,fe:0.55,mgn:29,ph:52,kal:485,zn:0.64,cu:0.19,mn:0.14,se:0.4,va:7,ve:2.07,vc:10,b1:0.07,b2:0.13,b3:1.74,b5:1.39,b6:0.26,fol:81,vk:21,gesf:2.13,zuk:0.66,salz:0.02},
+"Olivenöl": {ca:1,fe:0.56,kal:1,ve:14.4,vk:60.2,gesf:13.8,salz:0.01},
+"Rapsöl": {ve:17.5,vk:71.3,gesf:7.37},
+"Erdnussbutter": {bal:5,ca:49,fe:1.74,mgn:168,ph:335,kal:558,zn:2.51,cu:0.42,mn:1.67,se:4.1,ve:9.1,b1:0.15,b2:0.19,b3:13.1,b5:1.14,b6:0.44,fol:87,vk:0.3,gesf:10.3,zuk:10.5,salz:1.07},
+"Mandeln": {bal:12.5,ca:269,fe:3.71,mgn:270,ph:481,kal:733,zn:3.12,cu:1.03,mn:2.18,se:4.1,ve:25.6,b1:0.21,b2:1.14,b3:3.62,b5:0.47,b6:0.14,fol:44,gesf:3.8,zuk:4.35},
+"Walnüsse": {bal:6.7,ca:98,fe:2.91,mgn:158,ph:346,kal:441,zn:3.09,cu:1.59,mn:3.41,se:4.9,va:1,ve:0.7,vc:1.3,b1:0.34,b2:0.15,b3:1.13,b5:0.57,b6:0.54,fol:98,vk:2.7,gesf:6.13,zuk:2.61,salz:0.01},
+"Erdnüsse, geröstet": {bal:8.4,ca:58,fe:1.58,mgn:178,ph:363,kal:634,zn:2.77,cu:0.43,mn:1.79,se:9.3,ve:4.93,b1:0.15,b2:0.2,b3:14.4,b5:1.01,b6:0.47,fol:97,gesf:7.72,zuk:4.9,salz:1.02},
+"Honig": {bal:0.2,ca:6,fe:0.42,mgn:2,ph:4,kal:52,zn:0.22,cu:0.04,mn:0.08,se:0.8,vc:0.5,b2:0.04,b3:0.12,b5:0.07,b6:0.02,fol:2,zuk:82.1,salz:0.01},
+"Marmelade": {bal:1.1,ca:20,fe:0.49,mgn:4,ph:19,kal:77,zn:0.06,cu:0.1,mn:0.04,se:2,ve:0.12,vc:8.8,b1:0.02,b2:0.08,b3:0.04,b5:0.02,b6:0.02,fol:11,gesf:0.01,zuk:48.5,salz:0.08},
+"Nuss-Nougat-Creme": {bal:5.4,ca:108,fe:4.38,mgn:64,ph:152,kal:407,zn:1.06,cu:0.47,mn:0.87,se:3.6,va:1,ve:4.96,b1:0.09,b2:0.17,b3:0.43,b5:0.36,b6:0.08,fol:14,b12:0.27,vk:1.9,gesf:28.4,zuk:54.1,salz:0.1},
+"Frischkäse": {ca:97,fe:0.11,mgn:9,ph:107,kal:132,zn:0.5,cu:0.02,mn:0.01,se:8.6,va:308,ve:0.86,b1:0.02,b2:0.23,b3:0.09,b5:0.52,b6:0.06,fol:9,b12:0.22,vk:2.1,gesf:20.2,zuk:3.76,salz:0.79},
+"Ketchup": {bal:0.3,ca:15,fe:0.35,mgn:13,ph:26,kal:281,zn:0.17,cu:0.09,mn:0.08,se:0.7,va:26,ve:1.46,vc:4.1,b1:0.01,b2:0.17,b3:1.43,b5:0.05,b6:0.16,fol:9,vk:3,gesf:0.01,zuk:21.3,salz:2.27},
+"Mayonnaise": {ca:8,fe:0.21,mgn:1,ph:21,kal:20,zn:0.15,cu:0.02,mn:0.01,se:2.3,va:16,ve:3.28,vd:0.2,b1:0.01,b2:0.02,b5:0.17,b6:0.01,fol:5,b12:0.12,vk:163,gesf:11.7,zuk:0.57,salz:1.59},
+"Senf": {bal:4,ca:63,fe:1.61,mgn:48,ph:108,kal:152,zn:0.64,cu:0.07,mn:0.42,se:33.5,va:5,ve:0.36,vc:0.3,b1:0.18,b2:0.07,b3:0.56,b5:0.25,b6:0.07,fol:7,vk:1.4,gesf:0.21,zuk:0.92,salz:2.76},
+"Tomatensoße": {bal:1.8,ca:26,fe:0.73,mgn:18,ph:34,kal:320,zn:0.2,cu:0.08,mn:0.13,se:1.4,va:31,ve:2.4,vc:2,b1:0.02,b2:0.06,b3:3.92,b5:0.08,b6:0.17,fol:13,vk:13.9,gesf:0.22,zuk:4.91,salz:1.09},
+"Zucker": {ca:1,fe:0.05,kal:2,zn:0.01,cu:0.01,mn:0,se:0.6,b2:0.02,zuk:99.8},
+"Pizza Margherita": {bal:2.3,ca:188,fe:2.48,mgn:24,ph:216,kal:172,zn:1.34,cu:0.11,mn:0.36,se:19.9,va:69,ve:0.83,vc:1.4,b1:0.39,b2:0.2,b3:3.83,b6:0.08,fol:93,b12:0.42,vk:6.7,gesf:4.47,zuk:3.58,salz:1.5},
+"Döner Kebab": {bal:1.2,ca:171,fe:1.81,mgn:20,ph:112,kal:282,zn:1.05,cu:0.08,mn:0.35,se:19.9,va:22,ve:0.41,vd:0.2,vc:7.5,b1:0.34,b2:0.27,b3:4.32,b5:0.56,b6:0.2,fol:66,b12:0.22,vk:4.5,gesf:3.55,zuk:3.18,salz:1.44},
+"Burger": {bal:1.8,ca:116,fe:2.87,mgn:22,ph:110,kal:197,zn:2.03,cu:0.1,mn:0.32,se:24.7,va:3,ve:0.07,vd:0.1,vc:0.3,b1:0.35,b2:0.19,b3:4.06,b5:0.37,b6:0.11,fol:46,b12:1.2,vk:4.9,gesf:3.57,zuk:5.95,salz:1.22},
+"Currywurst": {ca:11,fe:1.22,mgn:9,ph:139,kal:252,zn:2.17,cu:0.05,mn:0.02,se:10.8,ve:0.2,vd:1,b1:0.02,b2:0.05,b3:1.83,b6:0.19,fol:10,b12:1.44,vk:1.8,gesf:11.6,zuk:1.27,salz:2.13},
+"Belegtes Brötchen": {bal:1.2,ca:171,fe:1.81,mgn:20,ph:112,kal:282,zn:1.05,cu:0.08,mn:0.35,se:19.9,va:22,ve:0.41,vd:0.2,vc:7.5,b1:0.34,b2:0.27,b3:4.32,b5:0.56,b6:0.2,fol:66,b12:0.22,vk:4.5,gesf:3.55,zuk:3.18,salz:1.44},
+"Lasagne": {bal:1.7,ca:111,fe:1.27,mgn:21,ph:107,kal:182,zn:0.91,cu:0.11,mn:0.2,se:26.2,va:46,ve:0.88,vc:17.1,b1:0.11,b2:0.15,b3:1.36,b5:0.2,b6:0.07,fol:32,b12:0.57,vk:9.1,gesf:2.11,zuk:4.23,salz:0.71},
+"Gulasch": {bal:0.9,ca:12,fe:2.48,mgn:8,ph:42,kal:163,zn:1,cu:0.14,mn:0.06,se:4.7,va:11,ve:0.27,vc:0.7,b1:0.07,b2:0.05,b3:1.1,b5:0.12,b6:0.09,fol:14,b12:0.5,vk:6.2,gesf:2.19,zuk:1.76,salz:0.97},
+"Eintopf": {bal:1.2,ca:18,fe:0.51,mgn:10,ph:48,kal:174,zn:0.56,cu:0.03,mn:0.07,se:3,va:115,ve:0.45,vc:3.6,b1:0.02,b2:0.02,b3:0.98,b6:0.13,fol:9,b12:0.17,vk:6,gesf:0.41,zuk:1.25,salz:0.82},
+"Schokolade": {bal:3.4,ca:189,fe:2.35,mgn:63,ph:208,kal:372,zn:2.3,cu:0.49,mn:0.47,se:4.5,va:59,ve:0.51,b1:0.11,b2:0.3,b3:0.39,b5:0.47,b6:0.04,fol:12,b12:0.75,vk:5.7,gesf:18.5,zuk:51.5,salz:0.2},
+"Gummibärchen": {bal:0.1,ca:3,fe:0.4,mgn:1,ph:1,kal:5,cu:0.01,mn:0.01,se:0.8,b1:0.01,b2:0.01,b3:0.01,b5:0.01,b6:0.01,zuk:59,salz:0.11},
+"Kekse": {bal:1.3,ca:13,fe:2.98,mgn:14,ph:66,kal:88,zn:0.49,cu:0.09,mn:0.39,se:6.2,ve:2.44,b1:0.35,b2:0.31,b3:3.28,b5:0.32,b6:0.07,fol:81,vk:11,gesf:8.11,zuk:21.7,salz:0.88},
+"Kuchen": {bal:0.6,ca:47,fe:1.48,mgn:8,ph:140,kal:149,zn:0.43,cu:0.04,mn:0.11,se:5,va:70,ve:0.65,vd:0.8,b1:0.17,b2:0.25,b3:1.62,b5:0.49,b6:0.04,fol:42,b12:0.36,vk:1.7,gesf:4.81,zuk:33.4,salz:0.94},
+"Eis": {bal:0.7,ca:128,fe:0.09,mgn:14,ph:105,kal:199,zn:0.69,cu:0.02,mn:0.01,se:1.8,va:118,ve:0.3,vd:0.2,vc:0.6,b1:0.04,b2:0.24,b3:0.12,b5:0.58,b6:0.05,fol:5,b12:0.39,vk:0.3,gesf:6.79,zuk:21.2,salz:0.2},
+"Chips": {bal:3.1,ca:21,fe:1.28,mgn:63,ph:153,kal:1196,zn:1.09,cu:0.23,mn:0.43,se:2.5,ve:10.5,vc:21.6,b1:0.21,b2:0.09,b3:4.76,b5:0.96,b6:0.53,fol:29,vk:22.1,gesf:3.4,zuk:0.33,salz:1.32},
+"Apfelsaft": {bal:0.2,ca:8,fe:0.12,mgn:5,ph:7,kal:101,zn:0.02,cu:0.01,mn:0.07,se:0.1,ve:0.01,vc:0.9,b1:0.02,b2:0.02,b3:0.07,b5:0.05,b6:0.02,gesf:0.02,zuk:9.62,salz:0.01},
+"Orangensaft": {bal:0.2,ca:11,fe:0.2,mgn:11,ph:17,kal:200,zn:0.05,cu:0.04,mn:0.01,se:0.1,va:10,ve:0.04,vc:50,b1:0.09,b2:0.03,b3:0.4,b5:0.19,b6:0.04,fol:30,vk:0.1,gesf:0.02,zuk:8.4},
+"Apfelschorle": {bal:0.11,ca:4.4,fe:0.07,mgn:2.75,ph:3.85,kal:55.6,zn:0.01,cu:0.01,mn:0.04,se:0.06,ve:0.01,vc:0.5,b1:0.01,b2:0.01,b3:0.04,b5:0.03,b6:0.01,gesf:0.01,zuk:5.29,salz:0.01},
+"Limonade": {ca:2,fe:0.02,mgn:1,kal:1,zn:0.01,b3:0.02,zuk:10.4,salz:0.03},
+"Isodrink": {ca:2,fe:0.05,mgn:1,kal:10,zn:0.01,cu:0.01,ve:0.57,vc:2.5,b1:0.01,b3:0.85,b6:0.06,b12:0.17,vk:0.2,salz:0.11},
+};
+/*MIKRO_ENDE*/
+/* [Schlüssel, Name, Einheit, Tagesbedarf Mann (DGE-Richtwerte), 1 = Höchstwert, Gruppe] */
+const NAEHR = [
+  ['bal', 'Ballaststoffe', 'g', 30, 0, 'S'],
+  ['zuk', 'Zucker', 'g', 50, 1, 'S'],
+  ['gesf', 'Gesättigte Fette', 'g', 26, 1, 'S'],
+  ['salz', 'Salz', 'g', 6, 1, 'S'],
+  ['va', 'Vitamin A', 'µg', 850, 0, 'V'],
+  ['b1', 'Vitamin B1', 'mg', 1.2, 0, 'V'],
+  ['b2', 'Vitamin B2', 'mg', 1.4, 0, 'V'],
+  ['b3', 'Niacin (B3)', 'mg', 15, 0, 'V'],
+  ['b5', 'Pantothensäure (B5)', 'mg', 5, 0, 'V'],
+  ['b6', 'Vitamin B6', 'mg', 1.6, 0, 'V'],
+  ['fol', 'Folat', 'µg', 300, 0, 'V'],
+  ['b12', 'Vitamin B12', 'µg', 4, 0, 'V'],
+  ['vc', 'Vitamin C', 'mg', 110, 0, 'V'],
+  ['vd', 'Vitamin D', 'µg', 20, 0, 'V'],
+  ['ve', 'Vitamin E', 'mg', 14, 0, 'V'],
+  ['vk', 'Vitamin K', 'µg', 70, 0, 'V'],
+  ['kal', 'Kalium', 'mg', 4000, 0, 'M'],
+  ['ca', 'Calcium', 'mg', 1000, 0, 'M'],
+  ['mgn', 'Magnesium', 'mg', 350, 0, 'M'],
+  ['ph', 'Phosphor', 'mg', 700, 0, 'M'],
+  ['fe', 'Eisen', 'mg', 10, 0, 'M'],
+  ['zn', 'Zink', 'mg', 14, 0, 'M'],
+  ['cu', 'Kupfer', 'mg', 1.5, 0, 'M'],
+  ['mn', 'Mangan', 'mg', 3.5, 0, 'M'],
+  ['se', 'Selen', 'µg', 70, 0, 'M'],
+];
+const KATEGORIEN = [...new Set(GRUND.map(x => x.kat))];
+const MAHLZEITEN = [['fruehstueck', 'Frühstück'], ['mittag', 'Mittagessen'], ['abend', 'Abendessen'], ['snack', 'Snacks']];
+const AKTIV = [[1.3, 'Sitzend', 'kaum Bewegung'], [1.45, 'Leicht', 'etwas Bewegung'], [1.6, 'Aktiv', 'Bewegung im Alltag + 3× Training'], [1.75, 'Sehr aktiv', 'körperliche Arbeit + 4–6× Training']];
+const STRATEGIEN = [[-750, 'Starker Cut', '−750 kcal'], [-500, 'Cut', '−500 kcal'], [-250, 'Leichter Cut', '−250 kcal'], [0, 'Halten', '±0'], [300, 'Aufbau', '+300 kcal']];
+
+/* ---------- Speicher ---------- */
+const KEY = 'kalorien-tracker';
+function neu() {
+  return {
+    version: 1,
+    profil: { geschlecht: null, alter: null, groesse: null, gewicht: null, zielgewicht: null, aktivitaet: 1.75, strategie: -500, manuell: false, kcalManuell: null },
+    zeiten: { fruehstueck: '06:30', mittag: '12:00', abend: '18:30', snack: '15:30' },
+    tage: {}, eigene: [], rezepte: [], favoriten: [], zuletzt: [], mengen: {}
+  };
+}
+function laden() {
+  try {
+    const roh = localStorage.getItem(KEY);
+    if (!roh) return neu();
+    const d = JSON.parse(roh), n = neu();
+    return { ...n, ...d, profil: { ...n.profil, ...d.profil }, zeiten: { ...n.zeiten, ...d.zeiten } };
+  } catch (e) { return neu(); }
+}
+let D = laden(), speicherFehler = false;
+function sichern() {
+  try { localStorage.setItem(KEY, JSON.stringify(D)); speicherFehler = false; }
+  catch (e) { speicherFehler = true; }
+}
+
+/* ---------- Hilfen ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const zahl = (n, st = 0) => Number(n).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: st });
+const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
+const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
+const p2 = n => String(n).padStart(2, '0');
+const schluessel = d => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
+const heute = () => schluessel(new Date());
+const alsDatum = k => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m - 1, d); };
+const plusTage = (k, n) => { const d = alsDatum(k); d.setDate(d.getDate() + n); return schluessel(d); };
+const kurzDatum = k => { const d = alsDatum(k); return p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + '.'; };
+function langDatum(k) {
+  const d = alsDatum(k), wt = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][d.getDay()], text = wt + ', ' + kurzDatum(k) + d.getFullYear();
+  if (k === heute()) return 'Heute · ' + text;
+  if (k === plusTage(heute(), -1)) return 'Gestern · ' + text;
+  return text;
+}
+const lies = k => D.tage[k] || { eintraege: [], gewicht: null };
+function tag(k) { if (!D.tage[k]) D.tage[k] = { eintraege: [], gewicht: null }; return D.tage[k]; }
+const nw = (e, feld) => e.teile ? e.faktor * e.teile.reduce((a, t) => a + t[feld] * t.g / 100, 0) : e[feld] * e.g / 100;
+const fmtN = v => zahl(v, v < 1 ? 2 : v < 10 ? 1 : 0);
+/* Hat der Eintrag Vitamin-Daten? Bei Rezepten: mindestens ein Teil */
+const hatMikro = e => !e.schnell && (e.teile ? e.teile.some(t => MIKRO[t.name]) : !!MIKRO[e.name]);
+/* Menge des Nährstoffs k im Eintrag (null = keine Daten) */
+function mikroWert(e, k) {
+  if (!hatMikro(e)) return null;
+  if (e.teile) { let v = 0; for (const t of e.teile) { const m = MIKRO[t.name]; if (m && m[k]) v += m[k] * t.g / 100; } return v * e.faktor; }
+  return (MIKRO[e.name][k] || 0) * e.g / 100;
+}
+function mikroSumme(liste) {
+  const s = {}; let ohne = 0;
+  for (const e of liste) {
+    if (!hatMikro(e)) { ohne++; continue; }
+    for (const [k] of NAEHR) { const v = mikroWert(e, k); if (v) s[k] = (s[k] || 0) + v; }
+  }
+  return { s, ohne };
+}
+const rezNach = name => D.rezepte.find(r => r.name === name);
+/* Macht aus den Einträgen einer Mahlzeit flache Rezept-Teile (Rezepte werden aufgelöst, Schnelleinträge fallen raus) */
+function alsTeile(liste) {
+  const teile = [];
+  for (const e of liste) {
+    if (e.schnell) continue;
+    if (e.teile) for (const t of e.teile) teile.push({ ...t, g: Math.round(t.g * e.faktor * 10) / 10 });
+    else teile.push({ name: e.name, g: e.g, einh: e.einh, kcal: e.kcal, e: e.e, k: e.k, f: e.f });
+  }
+  return teile;
+}
+const rezWert = (r, feld) => r.teile.reduce((a, t) => a + t[feld] * t.g / 100, 0);
+function summe(liste) { return liste.reduce((s, e) => ({ kcal: s.kcal + nw(e, 'kcal'), e: s.e + nw(e, 'e'), k: s.k + nw(e, 'k'), f: s.f + nw(e, 'f') }), { kcal: 0, e: 0, k: 0, f: 0 }); }
+const alleLM = () => [...D.eigene, ...GRUND];
+const lmNach = name => alleLM().find(x => x.name === name);
+const mengeText = (g, einh) => zahl(g, 1) + ' ' + einh;
+const rezG = r => r.teile.reduce((a, t) => a + t.g, 0);
+const eintragMenge = e => e.teile ? zahl(e.faktor * rezG(e), 1) + ' g' : mengeText(e.g, e.einh);
+
+function aktGewicht() {
+  const ks = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
+  return ks.length ? D.tage[ks[ks.length - 1]].gewicht : D.profil.gewicht;
+}
+function ziele() {
+  const p = D.profil, kg = aktGewicht();
+  const komplett = p.geschlecht && p.alter && p.groesse && kg;
+  let bmr = null, tdee = null, kcal = null;
+  if (komplett) {
+    bmr = 10 * kg + 6.25 * p.groesse - 5 * p.alter + (p.geschlecht === 'm' ? 5 : -161);
+    tdee = bmr * p.aktivitaet;
+    kcal = Math.round((tdee + p.strategie) / 10) * 10;
+  }
+  if (p.manuell && p.kcalManuell) kcal = p.kcalManuell;
+  let e = null, f = null, k = null;
+  if (kg && kcal) {
+    e = Math.round(kg * 2); f = Math.round(kg * 0.8);
+    k = Math.max(0, Math.round((kcal - 4 * e - 9 * f) / 4));
+  }
+  return { kcal, e, k, f, bmr, tdee, kg };
+}
+
+/* ---------- Oberfläche ---------- */
+const S = { tab: 'heute', datum: heute(), bereich: 30, analyse: 'e' };
+const TABS = [['heute', 'Heute', 'home'], ['verlauf', 'Fortschritt', 'chart'], ['eigene', 'Eigene', 'liste'], ['ziele', 'Ziele', 'ziel']];
+const ICON = {
+  fruehstueck: '<path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 9h1.500a2.500 2.500 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/>',
+  mittag: '<path d="M4 10a8 6 0 0 1 16 0z"/><path d="M3 14h18"/><path d="M5 18h14l-1 2H6z"/>',
+  abend: '<path d="M7 3v7a2 2 0 0 0 2 2v9M11 3v7a2 2 0 0 1-2 2M9 3v5"/><path d="M17 21V3c-2 1-3 3.500-3 7v4h3"/>',
+  snack: '<path d="M12 8c-2-2-7-1.500-7 4 0 4 3 9 5 9 1 0 1.200-.5 2-.5s1 .5 2 .5c2 0 5-5 5-9 0-5.500-5-6-7-4z"/><path d="M12 8c0-2 1-4 3-5"/>',
+  home: '<path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/>',
+  chart: '<path d="M5 20v-7h4v7zM10 20V5h4v15zM15 20V10h4v10z"/>',
+  liste: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
+  ziel: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  barcode: '<path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 8v8M11 8v8M14 8v8M16.5 8v8"/>',
+  blitz: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  teller: '<path d="M3 11h18a9 9 0 0 1-18 0z"/><path d="M9 7c0-2 2-2 2-4M14 7c0-2 2-2 2-4"/>',
+  kopie: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
+};
+const icon = (n, g = 24) => `<svg width="${g}" height="${g}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+
+function titelDatum(k) {
+  if (k === heute()) return 'Heute';
+  if (k === plusTage(heute(), -1)) return 'Gestern';
+  return ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][alsDatum(k).getDay()] + ', ' + kurzDatum(k);
+}
+function render() {
+  const titel = { verlauf: 'Fortschritt', eigene: 'Eigene', ziele: 'Ziele' }[S.tab];
+  $('kopf').innerHTML = (titel ? `<h1 class="titel">${titel}</h1>`
+    : `<button class="titel" data-a="kalender" aria-label="Datum wählen">${titelDatum(S.datum)} <small>▾</small></button>
+       <input type="date" id="dp" class="dp" max="${heute()}" value="${S.datum}" tabindex="-1" aria-hidden="true">`)
+    + '<button class="rund" data-a="thema" title="Hell / Dunkel" aria-label="Hell oder dunkel umschalten">◐</button>';
+  $('nav').innerHTML = TABS.map(([id, t, ic]) => `<button data-a="tab" data-v="${id}" class="${S.tab === id ? 'an' : ''}">${icon(ic)}<span>${t}</span></button>`).join('')
+    + `<button class="fab" data-a="fab" aria-label="Eintrag hinzufügen">${icon('plus', 28)}</button>`;
+  const inhalt = { heute: viewHeute, verlauf: viewVerlauf, eigene: viewEigene, ziele: viewZiele }[S.tab]();
+  const fehler = speicherFehler ? '<div class="hinweis warn">Speichern im Browser ist fehlgeschlagen. Bitte unter „Ziele" eine Sicherung herunterladen.</div>' : '';
+  $('app').innerHTML = fehler + inhalt;
+  if (S.tab === 'verlauf') zeichneCharts();
+}
+
+/* Welches Gericht macht wie viel vom Tag aus */
+function viewAnalyse(t, s, z) {
+  if (!t.eintraege.length) return '';
+  const ARTEN = [['kcal', 'Kalorien', 'kcal'], ['e', 'Eiweiß', 'g'], ['k', 'Kohlenhydrate', 'g'], ['f', 'Fett', 'g']];
+  const makro = ARTEN.find(a => a[0] === S.analyse), nx = makro ? null : NAEHR.find(x => x[0] === S.analyse);
+  const titel = makro ? makro[1] : nx[1], einh = makro ? makro[2] : nx[2];
+  const wVon = makro ? (e => nw(e, S.analyse)) : (e => mikroWert(e, S.analyse) || 0);
+  const gesamt = t.eintraege.reduce((a, e) => a + wVon(e), 0);
+  const soll = makro ? z[S.analyse] : nx[3], limit = nx && nx[4] === 1;
+  const mahlzeit = id => MAHLZEITEN.find(m => m[0] === id)[1];
+  const schwelle = soll ? soll * 0.002 : 0.05;
+  const zeilen = t.eintraege.map(e => ({ e, w: wVon(e) })).filter(x => x.w >= schwelle).sort((a, b) => b.w - a.w);
+  const ohneWerte = makro ? (S.analyse !== 'kcal' && t.eintraege.some(e => e.schnell)) : t.eintraege.some(e => !hatMikro(e));
+  const gruppen = [['V', 'Vitamine'], ['M', 'Mineralstoffe'], ['S', 'Weitere']];
+  let h = `<section class="karte"><h2>Tagesanalyse</h2>
+    <div class="chips" style="margin-bottom:12px">${ARTEN.map(([f, n]) => `<button class="chip ${S.analyse === f ? 'an' : ''}" data-a="analyse" data-v="${f}">${n}</button>`).join('')}
+      <select class="chip ${nx ? 'an' : ''}" id="anaMikro" aria-label="Vitamin oder Mineralstoff wählen">
+        <option value="" ${makro ? 'selected' : ''}>Vitamine & mehr …</option>
+        ${gruppen.map(([g, gt]) => `<optgroup label="${gt}">${NAEHR.filter(x => x[5] === g).map(x => `<option value="${x[0]}" ${S.analyse === x[0] ? 'selected' : ''}>${x[1]}</option>`).join('')}</optgroup>`).join('')}
+      </select></div>
+    <div style="margin-bottom:10px"><b>${fmtN(gesamt)} ${einh}</b> <span class="klein">${titel} heute erfasst${soll ? ` · ${zahl(Math.round(gesamt / soll * 100))} % ${limit ? `vom Tageslimit (≤ ${fmtN(soll)} ${einh})` : makro ? 'vom Ziel' : 'vom Tagesbedarf'}` : ''}</span></div>`;
+  for (const { e, w } of zeilen) {
+    const anteil = gesamt ? w / gesamt * 100 : 0;
+    h += `<div class="ana"><div class="ana-z"><span>${esc(e.name)}<br><span class="klein">${mahlzeit(e.m)}${e.schnell ? '' : ' · ' + eintragMenge(e)}</span></span>
+      <span><b>${fmtN(w)} ${einh}</b> <span class="klein">· ${zahl(Math.round(anteil))} %</span></span></div>
+      <div class="balken duenn"><i style="width:${anteil}%"></i></div></div>`;
+  }
+  if (!zeilen.length) h += `<p class="klein" style="margin:0">Keine Werte für ${titel} erfasst.</p>`;
+  if (ohneWerte) h += `<p class="klein" style="margin:10px 0 0">${makro ? 'Einträge mit „Nur Kalorien" haben keine Nährwerte und fehlen hier.' : 'Schnelleinträge und eigene Lebensmittel haben keine Vitamin-Daten und fehlen hier.'}</p>`;
+  return h + '</section>';
+}
+/* Tagesbilanz Vitamine & Mineralstoffe */
+function viewMikro(t) {
+  if (!t.eintraege.length) return '';
+  const { s, ohne } = mikroSumme(t.eintraege);
+  const gruppen = [['V', 'Vitamine'], ['M', 'Mineralstoffe'], ['S', 'Ballaststoffe, Zucker & Co.']];
+  let h = '<section class="karte"><h2>Vitamine & Mineralstoffe</h2>';
+  for (const [g, gt] of gruppen) {
+    h += `<h3 class="mikro-g">${gt}</h3><div class="mikro-gitter">`;
+    for (const [k, name, einh, ziel, max] of NAEHR.filter(x => x[5] === g)) {
+      const v = s[k] || 0, pz = Math.min(100, v / ziel * 100), drueber = max && v > ziel;
+      h += `<div class="mikro"><div class="mz"><span>${name}</span><span class="klein"><b style="color:${drueber ? 'var(--warn)' : 'var(--ink)'}">${fmtN(v)}</b> / ${max ? '≤ ' : ''}${fmtN(ziel)} ${einh}</span></div>
+        <div class="balken duenn"><i class="${drueber ? 'drueber' : ''}" style="width:${pz}%"></i></div></div>`;
+    }
+    h += '</div>';
+  }
+  h += `<p class="klein" style="margin:12px 0 0">${ohne ? `${ohne} ${ohne === 1 ? 'Eintrag' : 'Einträge'} ohne Vitamin-Daten (Schnelleinträge, eigene Lebensmittel). ` : ''}Werte aus der USDA-Datenbank, Tagesbedarf: DGE-Richtwerte für Männer. Antippen der Tagesanalyse oben zeigt, welches Gericht wie viel liefert.</p></section>`;
+  return h;
+}
+function wochenLeiste(z) {
+  const mo = plusTage(S.datum, -((alsDatum(S.datum).getDay() + 6) % 7)), ht = heute(), r = 12.5, u = 2 * Math.PI * r;
+  return '<div class="woche" id="woche">' + ['M', 'D', 'M', 'D', 'F', 'S', 'S'].map((b, i) => {
+    const k = plusTage(mo, i), kcal = summe(lies(k).eintraege).kcal;
+    const anteil = kcal > 0 ? (z.kcal ? Math.min(1, kcal / z.kcal) : 1) : 0;
+    return `<button class="wt ${k === S.datum ? 'an' : ''}" data-a="gehe" data-v="${k}" ${k > ht ? 'disabled' : ''} aria-label="${langDatum(k)}"><i></i><span>${b}</span>
+      <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="${r}" fill="none" stroke="currentColor" stroke-width="2" ${k === ht && !kcal ? 'stroke-dasharray="4 3"' : ''}/>
+      ${anteil ? `<circle cx="16" cy="16" r="${r}" fill="none" stroke="${z.kcal && kcal > z.kcal ? 'var(--warn)' : 'var(--akzent)'}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(anteil * u).toFixed(1)} ${u.toFixed(1)}" transform="rotate(-90 16 16)"/>` : ''}</svg></button>`;
+  }).join('') + '</div>';
+}
+/* Fortschrittsring: g = Größe, dicke = Strichstärke, anteil 0–1 */
+function ringSvg(g, dicke, anteil, drueber, innen) {
+  const r = (g - dicke) / 2 - 1, u = 2 * Math.PI * r, a = Math.max(0, Math.min(1, anteil || 0));
+  return `<div class="ringw" style="width:${g}px;height:${g}px"><svg width="${g}" height="${g}" viewBox="0 0 ${g} ${g}" aria-hidden="true">
+    <circle cx="${g / 2}" cy="${g / 2}" r="${r}" fill="none" stroke="var(--spur)" stroke-width="${dicke}"/>
+    ${a > 0 ? `<circle cx="${g / 2}" cy="${g / 2}" r="${r}" fill="none" stroke="${drueber ? 'var(--warn)' : 'var(--akzent)'}" stroke-width="${dicke}" stroke-linecap="round" stroke-dasharray="${(a * u).toFixed(1)} ${u.toFixed(1)}" transform="rotate(-90 ${g / 2} ${g / 2})"/>` : ''}
+  </svg><div>${innen}</div></div>`;
+}
+function makro(titel, ist, soll) {
+  const zuviel = titel !== 'Eiweiß' && soll && ist > soll;
+  let wert = zahl(Math.round(ist)), unter = soll ? `von ${zahl(soll)} g` : 'g gegessen';
+  if (S.makroRest && soll) {
+    const rest = Math.round(soll - ist);
+    wert = zahl(Math.abs(rest)); unter = rest < 0 ? 'g drüber' : 'g übrig';
+  }
+  return `<div class="makro"><div class="name">${titel}</div>
+    ${ringSvg(66, 7, soll ? ist / soll : 0, zuviel, `<b>${wert}</b>`)}
+    <div class="klein">${unter}</div></div>`;
+}
+function viewHeute() {
+  const t = lies(S.datum), s = summe(t.eintraege), z = ziele(), vortagK = plusTage(S.datum, -1), vortag = lies(vortagK);
+  const vortagName = alsDatum(vortagK).toLocaleDateString('de-DE', { weekday: 'long' });
+  let h = wochenLeiste(z);
+  if (!z.kcal) h += `<div class="hinweis"><span>Trag einmal deine Daten ein, dann rechnet die App dein Tagesziel aus.</span><button class="knopf" data-a="tab" data-v="ziele">Ziele</button></div>`;
+  const rest = z.kcal ? Math.round(z.kcal - s.kcal) : null;
+  h += `<section class="karte"><div class="kcal-wrap">
+    ${ringSvg(136, 11, z.kcal ? s.kcal / z.kcal : 0, rest != null && rest < 0,
+      z.kcal ? `<span class="gross">${zahl(Math.abs(rest))}</span><span class="klein">${rest < 0 ? 'kcal drüber' : 'kcal übrig'}</span>`
+             : `<span class="gross">${zahl(Math.round(s.kcal))}</span><span class="klein">kcal</span>`)}
+    <div class="kcal-rechts">
+      <div class="zr"><span class="klein">Gegessen</span><b>${zahl(Math.round(s.kcal))}</b></div>
+      ${z.kcal ? `<div class="zr"><span class="klein">Tagesziel</span><b>${zahl(z.kcal)}</b></div>
+      <div class="zr"><span class="klein">${rest < 0 ? 'Drüber' : 'Übrig'}</span><b class="${rest < 0 ? 'warn' : ''}">${zahl(Math.abs(rest))}</b></div>` : ''}
+    </div></div></section>`;
+  h += `<section class="karte"><div class="makros">${makro('Kohlenhydrate', s.k, z.k)}${makro('Fette', s.f, z.f)}${makro('Eiweiß', s.e, z.e)}
+    <button class="um" data-a="makroUm" title="Gegessen / Übrig" aria-label="Zwischen gegessen und übrig umschalten">⇄</button></div></section>`;
+  h += '<h2 class="abschnitt">Tagebuch</h2>';
+  for (const [id, titel] of MAHLZEITEN) {
+    const liste = t.eintraege.filter(e => e.m === id), sm = summe(liste), alt = vortag.eintraege.filter(e => e.m === id);
+    h += `<section class="karte"><div class="mahlzeit-kopf"><span class="mz-ic">${icon(id, 26)}</span>
+      <div class="mz-t"><b>${titel}</b><span class="klein">${[D.zeiten[id] ? D.zeiten[id] + ' Uhr' : null, liste.length ? zahl(Math.round(sm.kcal)) + ' kcal' : null].filter(Boolean).join(' · ')}</span></div>
+      <button class="pille" data-a="neu" data-v="${id}" aria-label="${titel}: eintragen">Eintragen</button></div>`;
+    if (!liste.length && alt.length) h += `<button class="erneut" data-a="kopieren" data-v="${id}"><span>Mahlzeit vom ${vortagName} erneut eintragen<br><span class="klein" style="font-weight:400">${esc(alt[0].name)}${alt.length > 1 ? ` und ${alt.length - 1} mehr` : ''}</span></span><span class="plus">+</span></button>`;
+    for (const e of liste) {
+      h += `<div class="eintrag"><button class="haupt" data-a="bearbeiten" data-v="${e.id}" ${e.schnell ? 'disabled' : ''}>
+        ${esc(e.name)}${e.schnell ? '' : ` <span class="klein" style="white-space:nowrap">· ${eintragMenge(e)}</span>`}</button>
+        <span class="wert">${zahl(Math.round(nw(e, 'kcal')))} kcal</span>
+        <button class="weg" data-a="loeschen" data-v="${e.id}" aria-label="${esc(e.name)} löschen">×</button></div>`;
+    }
+    if (alsTeile(liste).length >= 2) h += `<button class="erneut" data-a="rezept" data-v="${id}"><span>Als eigene Mahlzeit speichern<br><span class="klein" style="font-weight:400">diese Zutaten unter einem Namen merken</span></span><span class="plus">+</span></button>`;
+    h += '</section>';
+  }
+  h += viewAnalyse(t, s, z);
+  h += viewMikro(t);
+  h += `<section class="karte gewicht"><label for="kg">Gewicht an diesem Tag</label>
+    <input id="kg" inputmode="decimal" placeholder="kg" value="${t.gewicht != null ? zahl(t.gewicht, 1) : ''}"></section>`;
+  return h;
+}
+
+function tageBereich(n) { const ende = heute(); return Array.from({ length: n }, (_, i) => plusTage(ende, i - n + 1)); }
+function viewVerlauf() {
+  const keys = tageBereich(S.bereich), z = ziele();
+  const mit = keys.map(k => ({ k, t: lies(k), s: summe(lies(k).eintraege) }));
+  const erfasst = mit.filter(x => x.t.eintraege.length);
+  const n = erfasst.length, avg = f => n ? erfasst.reduce((a, x) => a + x.s[f], 0) / n : 0;
+  const imZiel = z.kcal ? erfasst.filter(x => x.s.kcal <= z.kcal).length : null;
+  const gew = mit.filter(x => x.t.gewicht != null), delta = gew.length > 1 ? gew[gew.length - 1].t.gewicht - gew[0].t.gewicht : null;
+  const kachel = (w, l) => `<div class="kachel"><b>${w}</b><span class="klein">${l}</span></div>`;
+  let h = `<div class="chips" style="margin-top:14px">${[7, 30, 90].map(b => `<button class="chip ${S.bereich === b ? 'an' : ''}" data-a="bereich" data-v="${b}">${b} Tage</button>`).join('')}</div>`;
+  h += `<div class="kacheln">
+    ${kachel(n ? zahl(Math.round(avg('kcal'))) : '–', 'Ø kcal je erfasstem Tag')}
+    ${kachel(n ? zahl(Math.round(avg('e'))) + ' g' : '–', 'Ø Eiweiß')}
+    ${kachel(imZiel != null ? imZiel + ' / ' + n : n, imZiel != null ? 'Tage im Kalorienziel' : 'erfasste Tage')}
+    ${kachel(delta != null ? (delta > 0 ? '+' : delta < 0 ? '−' : '') + zahl(Math.abs(delta), 1) + ' kg' : '–', 'Gewicht im Zeitraum')}</div>`;
+  h += `<section class="karte"><h2>Kalorien je Tag</h2>
+    ${z.kcal ? `<div class="legende"><span><i style="background:var(--akzent)"></i>bis Ziel</span><span><i style="background:var(--warn)"></i>über Ziel</span><span>– – Ziel ${zahl(z.kcal)} kcal</span></div>` : ''}
+    <div class="chart" id="cKcal"></div></section>`;
+  const gTage = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
+  const gStart = gTage.length ? D.tage[gTage[0]].gewicht : D.profil.gewicht, gAkt = gTage.length ? D.tage[gTage[gTage.length - 1]].gewicht : null;
+  const gDiff = gStart != null && gAkt != null ? gAkt - gStart : null;
+  h += `<section class="karte"><h2>Gewicht</h2>
+    <div class="gew"><div><span class="klein">Start</span><b>${gStart != null ? zahl(gStart, 1) + ' kg' : '–'}</b></div>
+      <div><span class="klein">Aktuell${gTage.length ? ' (' + kurzDatum(gTage[gTage.length - 1]) + ')' : ''}</span><b>${gAkt != null ? zahl(gAkt, 1) + ' kg' : '–'}</b></div>
+      <div><span class="klein">Unterschied</span><b>${gDiff != null ? (gDiff < 0 ? '↘ ' : gDiff > 0 ? '↗ ' : '') + zahl(Math.abs(gDiff), 1) + ' kg' : '–'}</b></div>
+      <div><span class="klein">Ziel</span><b>${D.profil.zielgewicht ? zahl(D.profil.zielgewicht, 1) + ' kg' : '–'}</b></div></div>
+    <div class="chart" id="cKg"></div>
+    <button class="knopf2" data-a="gewichtEingeben" style="width:100%;margin-top:12px;color:var(--akzent)">Mein Gewicht eingeben</button></section>`;
+  const zeilen = [...mit].reverse().filter(x => x.t.eintraege.length || x.t.gewicht != null);
+  h += `<section class="karte"><details><summary>Tabelle</summary>${zeilen.length ? `<table><thead><tr><th>Tag</th><th>kcal</th><th>E</th><th>K</th><th>F</th><th>kg</th></tr></thead><tbody>
+    ${zeilen.map(x => `<tr><td>${kurzDatum(x.k)}</td><td>${x.t.eintraege.length ? zahl(Math.round(x.s.kcal)) : '–'}</td><td>${x.t.eintraege.length ? zahl(Math.round(x.s.e)) : '–'}</td><td>${x.t.eintraege.length ? zahl(Math.round(x.s.k)) : '–'}</td><td>${x.t.eintraege.length ? zahl(Math.round(x.s.f)) : '–'}</td><td>${x.t.gewicht != null ? zahl(x.t.gewicht, 1) : '–'}</td></tr>`).join('')}
+    </tbody></table>` : '<p class="klein">Noch keine Einträge in diesem Zeitraum.</p>'}</details></section>`;
+  return h;
+}
+
+function achseX(keys, x, H, unten) {
+  const schritt = Math.max(1, Math.ceil(keys.length / 6));
+  let s = '';
+  for (let i = keys.length - 1; i >= 0; i -= schritt) s += `<text x="${x(i)}" y="${H - unten + 18}" text-anchor="middle">${kurzDatum(keys[i])}</text>`;
+  return s;
+}
+function zeichneCharts() {
+  const keys = tageBereich(S.bereich), z = ziele();
+  const leer = t => `<p class="klein">${t}</p>`;
+  /* Kalorien: Balken */
+  const elK = $('cKcal'), daten = keys.map(k => { const t = lies(k); return t.eintraege.length ? summe(t.eintraege) : null; });
+  if (!daten.some(Boolean)) elK.innerHTML = leer('Noch keine Einträge in diesem Zeitraum.');
+  else {
+    const W = Math.max(280, elK.clientWidth), H = 220, L = 44, R = 6, O = 10, U = 26;
+    const roh = Math.max(z.kcal || 0, ...daten.map(d => d ? d.kcal : 0)) * 1.08;
+    const stufe = roh > 3200 ? 1000 : 500, max = Math.ceil(roh / stufe) * stufe;
+    const y = v => O + (H - O - U) * (1 - v / max), slot = (W - L - R) / keys.length, x = i => L + slot * (i + .5);
+    const bw = Math.max(2, Math.min(28, slot - 2));
+    let s = '';
+    for (let v = 0; v <= max; v += stufe) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--linie)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${zahl(v)}</text>`;
+    daten.forEach((d, i) => {
+      if (!d || d.kcal <= 0) return;
+      const x0 = x(i) - bw / 2, yt = y(d.kcal), yb = y(0), r = Math.min(4, bw / 2, yb - yt);
+      s += `<path fill="${z.kcal && d.kcal > z.kcal ? 'var(--warn)' : 'var(--akzent)'}" d="M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x0 + bw - r}Q${x0 + bw} ${yt} ${x0 + bw} ${yt + r}V${yb}Z"/>`;
+    });
+    if (z.kcal) s += `<line x1="${L}" x2="${W - R}" y1="${y(z.kcal)}" y2="${y(z.kcal)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    s += achseX(keys, x, H, U);
+    daten.forEach((d, i) => {
+      const tt = kurzDatum(keys[i]) + '\n' + (d ? `${zahl(Math.round(d.kcal))} kcal` + (z.kcal ? (d.kcal > z.kcal ? ` · ${zahl(Math.round(d.kcal - z.kcal))} über Ziel` : ` · ${zahl(Math.round(z.kcal - d.kcal))} unter Ziel`) : '') + `\nE ${zahl(Math.round(d.e))} · K ${zahl(Math.round(d.k))} · F ${zahl(Math.round(d.f))} g` : 'nichts erfasst');
+      s += `<rect class="hit" x="${L + slot * i}" y="${O}" width="${slot}" height="${H - O - U}" data-tt="${esc(tt)}"/>`;
+    });
+    elK.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Kalorien je Tag">${s}</svg>`;
+  }
+  /* Gewicht: Linie */
+  const elG = $('cKg'), pkt = keys.map((k, i) => ({ i, k, v: lies(k).gewicht })).filter(p => p.v != null);
+  if (!pkt.length) { elG.innerHTML = leer('Noch kein Gewicht in diesem Zeitraum. Du trägst es unten auf der Seite „Heute" ein.'); return; }
+  const W = Math.max(280, elG.clientWidth), H = 200, L = 44, R = 12, O = 10, U = 26;
+  const zg = D.profil.zielgewicht, werte = pkt.map(p => p.v);
+  let lo = Math.min(...werte), hi = Math.max(...werte);
+  const zielSichtbar = zg != null && zg >= lo - 3 && zg <= hi + 3;
+  if (zielSichtbar) { lo = Math.min(lo, zg); hi = Math.max(hi, zg); }
+  lo = Math.floor(lo - .5); hi = Math.ceil(hi + .5);
+  const stufe = hi - lo > 12 ? 5 : hi - lo > 5 ? 2 : 1;
+  const y = v => O + (H - O - U) * (1 - (v - lo) / (hi - lo)), slot = (W - L - R) / keys.length, x = i => L + slot * (i + .5);
+  let s = '';
+  for (let v = Math.ceil(lo / stufe) * stufe; v <= hi; v += stufe) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--linie)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  if (zielSichtbar) s += `<line x1="${L}" x2="${W - R}" y1="${y(zg)}" y2="${y(zg)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="${W - R}" y="${y(zg) - 5}" text-anchor="end">Ziel ${zahl(zg, 1)} kg</text>`;
+  if (pkt.length > 1) s += `<polyline fill="none" stroke="var(--akzent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pkt.map(p => x(p.i) + ',' + y(p.v)).join(' ')}"/>`;
+  const dicht = pkt.length > 30;
+  pkt.forEach((p, n) => { if (!dicht || n === pkt.length - 1) s += `<circle cx="${x(p.i)}" cy="${y(p.v)}" r="4" fill="var(--akzent)" stroke="var(--flaeche)" stroke-width="2"/>`; });
+  s += achseX(keys, x, H, U);
+  keys.forEach((k, i) => {
+    const nah = pkt.reduce((a, b) => Math.abs(b.i - i) < Math.abs(a.i - i) ? b : a);
+    s += `<rect class="hit" x="${L + slot * i}" y="${O}" width="${slot}" height="${H - O - U}" data-tt="${esc(kurzDatum(nah.k) + '\n' + zahl(nah.v, 1) + ' kg')}"/>`;
+  });
+  elG.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Gewichtsverlauf">${s}</svg>`;
+}
+
+function viewEigene() {
+  const opt = ['', 'Stück', 'Scheibe', 'Portion', 'Packung', 'Becher', 'Löffel'];
+  let h = `<section class="karte"><h2>Eigenes Lebensmittel anlegen</h2>
+    <p class="klein" style="margin-top:0">Die Werte stehen meist hinten auf der Packung, Spalte „je 100 g".</p>
+    <form id="fEigen">
+    <label class="feld"><span>Name</span><input name="name" required maxlength="60"></label>
+    <div class="gitter">
+      <label class="feld"><span>kcal je 100 g</span><input name="kcal" inputmode="decimal" required></label>
+      <label class="feld"><span>Eiweiß (g)</span><input name="e" inputmode="decimal"></label>
+      <label class="feld"><span>Kohlenhydrate (g)</span><input name="k" inputmode="decimal"></label>
+      <label class="feld"><span>Fett (g)</span><input name="f" inputmode="decimal"></label>
+    </div>
+    <p class="warn" id="fEigenFehler" hidden></p>
+    <button class="knopf">Anlegen</button></form></section>`;
+  h += `<section class="karte"><h2>Meine Lebensmittel</h2>`;
+  if (!D.eigene.length) h += '<p class="klein" style="margin:0">Noch keine eigenen Lebensmittel.</p>';
+  for (const l of D.eigene) h += `<div class="eintrag"><div class="haupt">${esc(l.name)} <span class="klein">· ${zahl(l.kcal)} kcal · E ${zahl(l.e, 1)} / K ${zahl(l.k, 1)} / F ${zahl(l.f, 1)}${l.pn ? ` · ${esc(l.pn)} = ${zahl(l.pg)} g` : ''}</span></div>
+    <button class="weg" data-a="eigenWeg" data-v="${esc(l.name)}" aria-label="${esc(l.name)} löschen">×</button></div>`;
+  h += `</section><section class="karte"><div class="mahlzeit-kopf"><h2 style="flex:1;margin:0">Meine Mahlzeiten</h2><button class="pille" data-a="bauNeuEigene">+ Mahlzeit erstellen</button></div>`;
+  if (!D.rezepte.length) h += '<p class="klein" style="margin:12px 0 0">Noch keine. Tippe auf „Mahlzeit erstellen", gib einen Namen ein und füge die Zutaten mit Gramm hinzu. Danach trägst du die ganze Mahlzeit mit einem Tipp ein.</p>';
+  for (const r of D.rezepte) h += `<div class="eintrag"><button class="haupt" data-a="bauEditEigene" data-v="${esc(r.name)}">${esc(r.name)} <span class="klein">· ${zahl(Math.round(rezWert(r, 'kcal')))} kcal · ${esc(r.teile.map(t => t.name).join(', '))}</span></button>
+    <button class="weg" data-a="rezWeg" data-v="${esc(r.name)}" aria-label="${esc(r.name)} löschen">×</button></div>`;
+  return h + '</section>';
+}
+
+function viewZiele() {
+  const p = D.profil, wert = v => v == null ? '' : zahl(v, 1);
+  const wahl = (k, liste) => `<div class="chips">${liste.map(([v, t, u]) => `<button class="chip ${String(p[k]) === String(v) ? 'an' : ''}" data-a="pset" data-k="${k}" data-v="${v}" ${u ? `title="${esc(u)}"` : ''}>${t}${k === 'strategie' ? ` <span style="opacity:.8">${u}</span>` : ''}</button>`).join('')}</div>`;
+  const aktHinweis = (AKTIV.find(a => a[0] === p.aktivitaet) || [])[2] || '';
+  return `<section class="karte"><h2>Dein Tagesziel</h2><div id="zielAus">${zielAusgabe()}</div></section>
+  <section class="karte"><h2>Deine Daten</h2>
+    <div class="feld"><span>Berechnung nach</span>${wahl('geschlecht', [['m', 'männlich'], ['w', 'weiblich']])}</div>
+    <div class="gitter">
+      <label class="feld"><span>Alter</span><input data-p="alter" inputmode="numeric" value="${wert(p.alter)}"></label>
+      <label class="feld"><span>Größe (cm)</span><input data-p="groesse" inputmode="numeric" value="${wert(p.groesse)}"></label>
+      <label class="feld"><span>Gewicht (kg)</span><input data-p="gewicht" inputmode="decimal" value="${wert(p.gewicht)}"></label>
+      <label class="feld"><span>Zielgewicht (kg)</span><input data-p="zielgewicht" inputmode="decimal" value="${wert(p.zielgewicht)}"></label>
+    </div>
+    <p class="klein" style="margin-top:0">Sobald du auf der Seite „Heute" ein Gewicht einträgst, rechnet die App automatisch mit dem neuesten Wert.</p>
+    <div class="feld"><span>Aktivität</span>${wahl('aktivitaet', AKTIV)}<div class="klein" style="margin-top:4px">${esc(aktHinweis)}</div></div>
+    <div class="feld"><span>Vorhaben</span>${wahl('strategie', STRATEGIEN)}</div>
+    <label class="feld" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="manuell" style="width:auto" ${p.manuell ? 'checked' : ''}><span style="margin:0">Kalorienziel selbst festlegen</span></label>
+    <label class="feld" id="manuellFeld" ${p.manuell ? '' : 'hidden'}><span>kcal pro Tag</span><input data-p="kcalManuell" inputmode="numeric" value="${wert(p.kcalManuell)}"></label>
+  </section>
+  <section class="karte"><h2>Mahlzeiten-Zeiten</h2>
+    <p class="klein" style="margin-top:0">Steht im Tagebuch dabei, und der Plus-Knopf unten schlägt dir die Mahlzeit vor, deren Zeit am nächsten liegt.</p>
+    <div class="gitter">${MAHLZEITEN.map(([id, t]) => `<label class="feld"><span>${t}</span><input type="time" data-z="${id}" value="${esc(D.zeiten[id] || '')}"></label>`).join('')}</div>
+  </section>
+  <section class="karte"><h2>Datensicherung</h2>
+    <p class="klein" style="margin-top:0">Deine Daten liegen nur in diesem Browser. Die Sicherung nimmst du auch für den Abgleich zwischen PC und Handy.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="knopf2" data-a="export">Sicherung herunterladen</button><button class="knopf2" data-a="import">Sicherung einspielen</button></div>
+  </section>
+  <p class="klein">Nährwerte der Grundliste sind Richtwerte. Der Bedarf ist eine Schätzung (Mifflin-St-Jeor × Aktivität): Bleibt das Gewicht über 2–3 Wochen anders als geplant, stell das Ziel nach.</p>`;
+}
+function zielAusgabe() {
+  const z = ziele(), p = D.profil;
+  if (!z.kcal) return '<p class="klein" style="margin:0">Noch unvollständig: Bitte Berechnung, Alter, Größe und Gewicht angeben.</p>';
+  let h = `<div class="ergebnis"><div><b>${zahl(z.kcal)}</b><span class="klein">kcal</span></div>
+    <div><b>${z.e != null ? zahl(z.e) + ' g' : '–'}</b><span class="klein">Eiweiß (2 g/kg)</span></div>
+    <div><b>${z.k != null ? zahl(z.k) + ' g' : '–'}</b><span class="klein">Kohlenhydrate</span></div>
+    <div><b>${z.f != null ? zahl(z.f) + ' g' : '–'}</b><span class="klein">Fett (0,8 g/kg)</span></div></div>`;
+  if (z.tdee) {
+    h += `<div class="klein">Geschätzter Verbrauch: ${zahl(Math.round(z.tdee / 10) * 10)} kcal · Grundumsatz: ${zahl(Math.round(z.bmr / 10) * 10)} kcal</div>`;
+    const defizit = z.tdee - z.kcal;
+    if (z.kg && p.zielgewicht && z.kg > p.zielgewicht && defizit > 0) {
+      const d = new Date(); d.setDate(d.getDate() + Math.round((z.kg - p.zielgewicht) * 7700 / defizit));
+      h += `<div class="klein" style="margin-top:4px">Rechnerisch ${zahl(p.zielgewicht, 1)} kg etwa im ${d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}.</div>`;
+      if (defizit * 7 / 7700 > z.kg * 0.01) h += `<div class="warn" style="margin-top:6px">Das wäre mehr als 1 % Körpergewicht pro Woche – dabei geht leicht Muskelmasse verloren.</div>`;
+    }
+    if (z.kcal < z.bmr) h += `<div class="warn" style="margin-top:6px">Das Ziel liegt unter deinem Grundumsatz. Das ist auf Dauer zu wenig.</div>`;
+  }
+  return h;
+}
+
+/* ---------- Auswahl-Dialog ---------- */
+const dlg = $('dlg');
+dlg.addEventListener('close', () => stopKamera());
+let P = null;
+function oeffne(m, fab) {
+  P = { m, fab, suche: '', reiter: 'alle', kat: D.favoriten.length ? 'Favoriten' : KATEGORIEN[0], lm: null, edit: null, g: null, schnell: false };
+  zeichneDlg(); if (!dlg.open) dlg.showModal();
+  if (matchMedia('(hover:hover)').matches && $('such')) $('such').focus();
+}
+function titelM() { return (MAHLZEITEN.find(x => x[0] === P.m) || [])[1]; }
+function zeichneDlg() {
+  stopKamera();
+  if (P.code) return zeichneCode();
+  if (P.schnell) return zeichneSchnell();
+  if (P.bau) return zeichneBau();
+  if (P.rez) return zeichneRezMenge();
+  if (P.lm) return zeichneMenge();
+  dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="weg" data-a="zu" aria-label="Schließen">←</button>
+    <select id="pMz" class="titel-sel" aria-label="In welche Mahlzeit eintragen">${MAHLZEITEN.map(([id, t]) => `<option value="${id}" ${P.m === id ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <span style="width:32px"></span></div>
+    <input id="such" placeholder="Nahrungsmittel oder Mahlzeit suchen" value="${esc(P.suche)}" autocomplete="off">
+    <div class="reiter">${[['alle', 'Alle'], ['mahlzeiten', 'Meine Mahlzeiten'], ['lm', 'Nahrungsmittel']].map(([id, t]) => `<button class="${P.reiter === id ? 'an' : ''}" data-a="reiter" data-v="${id}">${t}</button>`).join('')}</div>
+    <div class="liste" id="pl"></div></div>`;
+  zeichneListe();
+}
+const stdMenge = x => D.mengen[x.name] || x.pg || 100;
+function kachelReihe(liste) {
+  return `<div class="kacheln2">${liste.map(([a, ic, t, aus]) => `<button class="kachelb" data-a="${a}" ${aus ? 'disabled' : ''}>${icon(ic, 30)}<span>${t}</span></button>`).join('')}</div>`;
+}
+function lmZeile(x) {
+  const g = stdMenge(x), fav = D.favoriten.includes(x.name);
+  return `<div class="zeile2"><button class="wahl" data-a="wahl" data-v="${esc(x.name)}"><b>${esc(x.name)}</b><span class="klein">${zahl(Math.round(x.kcal * g / 100))} kcal · ${mengeText(g, x.einh)}</span></button>
+    <button class="stern ${fav ? 'an' : ''}" data-a="fav" data-v="${esc(x.name)}" aria-label="Favorit">${fav ? '★' : '☆'}</button>
+    <button class="plusk" data-a="plusLm" data-v="${esc(x.name)}" aria-label="${esc(x.name)} eintragen">+</button></div>`;
+}
+function rezZeile(r) {
+  const w = f => zahl(Math.round(rezWert(r, f)));
+  return `<div class="zeile2"><button class="wahl" data-a="rezWahl" data-v="${esc(r.name)}"><b>${esc(r.name)}</b><span class="klein">${w('kcal')} kcal · KH ${w('k')} g · Fett ${w('f')} g · Eiweiß ${w('e')} g</span></button>
+    <button class="plusk" data-a="plusRez" data-v="${esc(r.name)}" aria-label="${esc(r.name)} eintragen">+</button></div>`;
+}
+function zeichneListe() {
+  const leer = t => `<p class="klein" style="margin-top:14px">${t}</p>`;
+  let h = '';
+  if (P.suche.trim()) {
+    const q = norm(P.suche.trim());
+    h = D.rezepte.filter(r => norm(r.name).includes(q)).map(rezZeile).join('') + alleLM().filter(x => norm(x.name).includes(q)).map(lmZeile).join('')
+      || leer('Nichts gefunden. Eigene Nahrungsmittel legst du im Reiter „Eigene" an.');
+  } else if (P.reiter === 'alle') {
+    h = kachelReihe([['code', 'barcode', 'Strichcode einscannen'], ['schnell', 'blitz', 'Schnell hinzufügen']]);
+    const verlauf = D.zuletzt.map(n => n.startsWith('rez:') ? { r: rezNach(n.slice(4)) } : { l: lmNach(n) }).filter(x => x.r || x.l);
+    h += '<div class="liste-kopf">Verlauf</div>' + (verlauf.length ? verlauf.map(x => x.r ? rezZeile(x.r) : lmZeile(x.l)).join('')
+      : leer('Hier steht später, was du zuletzt eingetragen hast. Mit + trägst du es mit einem Tipp erneut ein.'));
+  } else if (P.reiter === 'mahlzeiten') {
+    const vorher = lies(plusTage(S.datum, -1)).eintraege.some(e => e.m === P.m);
+    h = kachelReihe([['bauNeu', 'teller', 'Mahlzeit erstellen'], ['kopierenDlg', 'kopie', 'Vorherige Mahlzeit kopieren', !vorher]]);
+    h += '<div class="liste-kopf">Meine Mahlzeiten</div>' + (D.rezepte.length ? D.rezepte.map(rezZeile).join('')
+      : leer('Noch keine eigenen Mahlzeiten. Tippe auf „Mahlzeit erstellen", gib einen Namen ein und füge die Zutaten mit Gramm hinzu.'));
+  } else {
+    const kats = ['Favoriten', 'Eigene', ...KATEGORIEN];
+    h = `<div class="chips zeile" style="margin-top:12px">${kats.map(k => `<button class="chip ${P.kat === k ? 'an' : ''}" data-a="kat" data-v="${esc(k)}">${esc(k)}</button>`).join('')}</div>`;
+    const liste = P.kat === 'Favoriten' ? D.favoriten.map(lmNach).filter(Boolean) : P.kat === 'Eigene' ? D.eigene : GRUND.filter(x => x.kat === P.kat);
+    h += liste.map(lmZeile).join('') || leer(P.kat === 'Favoriten' ? 'Noch keine Favoriten. Tippe bei einem Nahrungsmittel auf ☆.' : 'Noch keine eigenen Nahrungsmittel. Anlegen im Reiter „Eigene".');
+  }
+  $('pl').innerHTML = h;
+}
+function zeichneMenge() {
+  const l = P.lm;
+  dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf">${P.edit ? '<span></span>' : '<button class="knopf2" data-a="zurueck">‹ Zurück</button>'}<button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
+    <h2>${esc(l.name)}</h2>
+    <label class="feld" style="margin:0"><span>Menge in ${l.einh}</span><input id="menge" inputmode="decimal" value="${zahl(P.g, 1)}"></label>
+    <div class="vorschau" id="vs"></div>
+    <button class="knopf" data-a="eintragen">${P.edit ? 'Speichern' : 'Eintragen'}</button></div>`;
+  zeigeVorschau();
+}
+function vorschauHtml(wVon) {
+  const z = ziele();
+  const teil = (titel, f, einh, soll) => {
+    const wert = wVon(f), a = soll ? wert / soll : 0;
+    return `<div>${ringSvg(56, 6, a, false, soll ? `<b>${zahl(Math.round(a * 100))}<small>%</small></b>` : `<b>${zahl(Math.round(wert))}</b>`)}
+      <span class="klein">${titel}<br>${zahl(wert < 10 && wert > 0 ? wert : Math.round(wert), 1)} ${einh}</span></div>`;
+  };
+  return (z.kcal ? '<div class="klein" style="margin-bottom:8px">So viel deckt diese Menge von deinem Tagesbedarf:</div>' : '')
+    + `<div class="vgrid">${teil('Kalorien', 'kcal', 'kcal', z.kcal)}${teil('Eiweiß', 'e', 'g', z.e)}${teil('KH', 'k', 'g', z.k)}${teil('Fett', 'f', 'g', z.f)}</div>`;
+}
+function zeigeVorschau() {
+  const l = P.lm, g = P.g || 0;
+  $('vs').innerHTML = vorschauHtml(f => g * l[f] / 100);
+  dlg.querySelectorAll('[data-a="menge"]').forEach(b => b.classList.toggle('g-an', Number(b.dataset.v) === g));
+}
+/* Rezept: Portionen wählen */
+function zeichneRezMenge() {
+  const r = P.rez;
+  dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf">${P.edit ? '<span></span>' : '<button class="knopf2" data-a="zurueck">‹ Zurück</button>'}<button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
+    <h2>${esc(r.name)}</h2>
+    <p class="klein" style="margin:0">${r.teile.map(t => esc(t.name) + ' ' + mengeText(t.g, t.einh || 'g')).join(' · ')}</p>
+    <label class="feld" style="margin:0"><span>Menge in g <span class="klein" style="font-weight:400">(ganze Mahlzeit = ${zahl(rezG(r), 1)} g)</span></span><input id="portionen" inputmode="decimal" value="${zahl(P.faktor * rezG(r), 1)}"></label>
+    <div class="vorschau" id="vs"></div>
+    <div style="display:flex;gap:8px">${!P.edit && rezNach(r.name) ? `<button class="knopf2" data-a="bauEdit" data-v="${esc(r.name)}">Bearbeiten</button>` : ''}<button class="knopf" data-a="rezEintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
+  zeigeRezVorschau();
+}
+function zeigeRezVorschau() {
+  const f = P.faktor || 0;
+  $('vs').innerHTML = vorschauHtml(feld => rezWert(P.rez, feld) * f);
+}
+function rezEintragen() {
+  const f = P.faktor;
+  if (!(f > 0)) { $('portionen').focus(); return; }
+  if (P.edit) { const e = lies(S.datum).eintraege.find(x => x.id === P.edit); if (e) e.faktor = f; merke('rez:' + P.rez.name, f); sichern(); }
+  else fuegeRez(P.rez, f);
+  dlg.close(); render();
+}
+const neueId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function merke(schl, menge) { D.zuletzt = [schl, ...D.zuletzt.filter(n => n !== schl)].slice(0, 25); D.mengen[schl] = menge; }
+function fuegeLm(l, g) {
+  tag(S.datum).eintraege.push({ id: neueId(), m: P.m, name: l.name, g, einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f });
+  merke(l.name, g); sichern(); render();
+}
+function fuegeRez(r, f) {
+  tag(S.datum).eintraege.push({ id: neueId(), m: P.m, name: r.name, faktor: f, teile: r.teile.map(t => ({ ...t })) });
+  merke('rez:' + r.name, f); sichern(); render();
+}
+let toastZeit;
+function toast(text) {
+  const ziel = dlg.open ? dlg : document.body;
+  let t = ziel.querySelector(':scope > .toast');
+  if (!t) { document.querySelectorAll('.toast').forEach(x => x.remove()); t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); ziel.appendChild(t); }
+  t.textContent = text; t.classList.add('an');
+  clearTimeout(toastZeit); toastZeit = setTimeout(() => t.classList.remove('an'), 1800);
+}
+/* ---------- Eigene Mahlzeit erstellen / bearbeiten ---------- */
+function oeffneBau(teile, alt, ausPicker) {
+  if (!ausPicker) P = { m: 'fruehstueck', suche: '', reiter: 'mahlzeiten', kat: KATEGORIEN[0] };
+  P.ausPicker = !!ausPicker; P.rez = null; P.lm = null; P.schnell = false;
+  P.bau = { name: alt || '', teile: teile.map(t => ({ ...t })), alt: alt || null, waehlen: false, suche: '' };
+  zeichneDlg(); if (!dlg.open) dlg.showModal();
+}
+function endeBau() {
+  if (P.ausPicker) { P.bau = null; P.reiter = 'mahlzeiten'; zeichneDlg(); }
+  else { dlg.close(); render(); }
+}
+function zeichneBau() {
+  const b = P.bau;
+  if (b.waehlen) {
+    dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="knopf2" data-a="bauZurueck">‹ Zurück</button><h2>Zutat hinzufügen</h2><span style="width:60px"></span></div>
+      <input id="bauSuch" placeholder="Nahrungsmittel suchen" value="${esc(b.suche)}" autocomplete="off">
+      <div class="liste" id="bl"></div></div>`;
+    zeichneBauListe();
+    if (matchMedia('(hover:hover)').matches) $('bauSuch').focus();
+    return;
+  }
+  dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="weg" data-a="bauAbbruch" aria-label="Abbrechen">←</button><h2>${b.alt ? 'Mahlzeit bearbeiten' : 'Mahlzeit erstellen'}</h2><span style="width:32px"></span></div>
+    <label class="feld" style="margin:0"><span>Name der Mahlzeit</span><input id="bauName" maxlength="60" placeholder="z. B. Reispudding mit Whey und Himbeeren" value="${esc(b.name)}"></label>
+    <div class="liste">
+      <div class="liste-kopf" style="margin-top:4px">Zutaten</div>
+      ${b.teile.map((t, i) => `<div class="zutat"><span class="zn">${esc(t.name)}<br><span class="klein" id="zk${i}"></span></span>
+        <input data-bt="${i}" inputmode="decimal" value="${zahl(t.g, 1)}" aria-label="Menge ${esc(t.name)}"><span class="klein">${t.einh || 'g'}</span>
+        <button class="weg" data-a="bauWeg" data-v="${i}" aria-label="${esc(t.name)} entfernen">×</button></div>`).join('') || '<p class="klein">Noch keine Zutaten. Füge sie unten hinzu und gib jeweils die Grammzahl ein.</p>'}
+      <button class="knopf2" data-a="bauPlus" style="margin-top:12px;width:100%">+ Zutat hinzufügen</button>
+    </div>
+    <div class="vorschau" id="bauSum"></div>
+    <p class="warn" id="bauFehler" style="margin:0" hidden></p>
+    <div style="display:flex;gap:8px">${b.alt ? '<button class="knopf2" data-a="bauLoeschen">Löschen</button>' : ''}<button class="knopf" data-a="bauSpeichern" style="flex:1">Mahlzeit speichern</button></div></div>`;
+  zeigeBauSumme();
+}
+function zeigeBauSumme() {
+  const r = { teile: P.bau.teile };
+  P.bau.teile.forEach((t, i) => { const el = $('zk' + i); if (el) el.textContent = zahl(Math.round(t.kcal * t.g / 100)) + ' kcal · ' + zahl(Math.round(t.e * t.g / 100)) + ' g Eiweiß'; });
+  $('bauSum').innerHTML = `<div class="klein" style="margin-bottom:6px">Ganze Mahlzeit</div><div class="vgrid">${[['kcal', 'kcal'], ['e', 'g Eiweiß'], ['k', 'g KH'], ['f', 'g Fett']]
+    .map(([f, t]) => `<div><b style="display:block;font-size:20px">${zahl(Math.round(rezWert(r, f)))}</b><span class="klein">${t}</span></div>`).join('')}</div>`;
+}
+function zeichneBauListe() {
+  const q = norm(P.bau.suche.trim());
+  const liste = q ? alleLM().filter(x => norm(x.name).includes(q))
+    : [...D.zuletzt.filter(n => !n.startsWith('rez:')).map(lmNach).filter(Boolean), ...D.favoriten.map(lmNach).filter(Boolean), ...alleLM()].filter((x, i, a) => a.indexOf(x) === i);
+  $('bl').innerHTML = liste.slice(0, 80).map(x => `<div class="zeile2"><button class="wahl" data-a="bauNimm" data-v="${esc(x.name)}"><b>${esc(x.name)}</b><span class="klein">${zahl(x.kcal)} kcal · ${zahl(x.e, 1)} g Eiweiß je 100 ${x.einh}</span></button>
+    <button class="plusk" data-a="bauNimm" data-v="${esc(x.name)}" aria-label="${esc(x.name)} hinzufügen">+</button></div>`).join('') || '<p class="klein">Nichts gefunden.</p>';
+}
+function bauSpeichern() {
+  const b = P.bau, name = b.name.trim(), fehler = $('bauFehler');
+  const zeige = t => { fehler.textContent = t; fehler.hidden = false; };
+  if (!name) { $('bauName').focus(); return zeige('Bitte gib der Mahlzeit einen Namen.'); }
+  if (!b.teile.length) return zeige('Bitte mindestens eine Zutat hinzufügen.');
+  if (b.teile.some(t => !(t.g > 0))) return zeige('Bitte bei jeder Zutat eine Grammzahl eingeben.');
+  if ((rezNach(name) && name !== b.alt) || lmNach(name)) return zeige('Diesen Namen gibt es schon.');
+  const neu = { name, teile: b.teile.map(t => ({ ...t })) };
+  if (b.alt) {
+    const i = D.rezepte.findIndex(r => r.name === b.alt);
+    if (i >= 0) D.rezepte[i] = neu; else D.rezepte.unshift(neu);
+    if (name !== b.alt) {
+      D.zuletzt = D.zuletzt.map(n => n === 'rez:' + b.alt ? 'rez:' + name : n);
+      if (D.mengen['rez:' + b.alt]) { D.mengen['rez:' + name] = D.mengen['rez:' + b.alt]; delete D.mengen['rez:' + b.alt]; }
+    }
+  } else D.rezepte.unshift(neu);
+  sichern(); endeBau(); toast(`✓ „${name}“ gespeichert`);
+}
+/* ---------- Strichcode: Kamera (wo der Browser es kann) oder Nummer, Nährwerte von Open Food Facts ---------- */
+const kameraMoeglich = () => 'BarcodeDetector' in window && window.isSecureContext && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+let kam = null;
+function stopKamera() { if (kam) { clearInterval(kam.t); kam.s.getTracks().forEach(x => x.stop()); kam = null; } }
+async function starteKamera() {
+  const box = $('camBox'), video = $('camVideo'), hin = $('camHinweis');
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    stopKamera();
+    const det = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
+    video.srcObject = s; await video.play();
+    box.hidden = false; $('camKnopf').hidden = true;
+    kam = { s, t: setInterval(async () => {
+      if (!kam || video.readyState < 2) return;
+      try {
+        const treffer = await det.detect(video);
+        if (treffer.length) { const n = treffer[0].rawValue; stopKamera(); box.hidden = true; $('camKnopf').hidden = false; $('eanFeld').value = n; eanSuche(n); }
+      } catch (e) { /* einzelnes Bild nicht lesbar */ }
+    }, 300) };
+  } catch (e) {
+    hin.textContent = 'Die Kamera ist nicht verfügbar oder wurde nicht erlaubt. Tipp die Nummer unter dem Strichcode ein.';
+    hin.hidden = false;
+  }
+}
+function zeichneCode() {
+  const k = kameraMoeglich();
+  dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="knopf2" data-a="zurueck">‹ Zurück</button><h2>Strichcode</h2><span style="width:60px"></span></div>
+    <div class="liste">
+      ${k ? `<div id="camBox" class="cam" hidden><video id="camVideo" playsinline muted></video><i></i></div>
+      <button class="knopf" id="camKnopf" data-a="kamera" style="width:100%">Mit Kamera scannen</button>`
+        : '<p class="klein" style="margin-top:0">Mit der Kamera scannen geht in diesem Browser nicht. Tipp einfach die Nummer unter dem Strichcode ein.</p>'}
+      <p class="warn" id="camHinweis" hidden></p>
+      <label class="feld" style="margin:12px 0 8px"><span>Barcode-Nummer</span><input id="eanFeld" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="z. B. 4012345678901"></label>
+      <button class="knopf2" data-a="eanSuche" style="width:100%">Suchen</button>
+      <div id="eanErg"></div>
+    </div></div>`;
+}
+async function eanSuche(roh) {
+  const code = String(roh || '').replace(/\D/g, '');
+  const erg = () => $('eanErg');
+  if (code.length < 8) { erg().innerHTML = '<p class="warn">Bitte die ganze Nummer eingeben (8 bis 14 Ziffern).</p>'; return; }
+  const lokal = D.eigene.find(x => x.ean === code);
+  if (lokal) { erg().innerHTML = eanForm(code, lokal, 'Schon gespeichert. Werte prüfen und weiter.', true); return; }
+  erg().innerHTML = '<p class="klein">Suche bei Open Food Facts …</p>';
+  let p = null;
+  try {
+    const r = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=product_name,product_name_de,brands,nutriments`);
+    const j = await r.json();
+    if (j && j.status === 1 && j.product) p = j.product;
+  } catch (e) {
+    if (erg()) erg().innerHTML = eanForm(code, null, 'Keine Verbindung zu Open Food Facts. Du kannst die Werte von der Packung selbst eintragen.');
+    return;
+  }
+  if (!erg()) return;
+  if (!p) { erg().innerHTML = eanForm(code, null, 'Dieses Produkt kennt Open Food Facts nicht. Trag die Werte von der Packung ein, dann erkennt die App es beim nächsten Scan.'); return; }
+  const n = p.nutriments || {}, w = x => x == null || x === '' || isNaN(Number(x)) ? null : Math.round(Number(x) * 10) / 10;
+  const kcal = n['energy-kcal_100g'] != null ? n['energy-kcal_100g'] : (n['energy_100g'] != null ? n['energy_100g'] / 4.184 : null);
+  const marke = (p.brands || '').split(',')[0].trim(), titel = (p.product_name_de || p.product_name || '').trim();
+  const name = ((marke && !titel.toLowerCase().includes(marke.toLowerCase()) ? marke + ' ' : '') + titel).trim();
+  const v = { name, kcal: w(kcal), e: w(n.proteins_100g), k: w(n.carbohydrates_100g), f: w(n.fat_100g) };
+  const fehlt = [v.kcal, v.e, v.k, v.f].some(x => x == null);
+  erg().innerHTML = eanForm(code, v, 'Gefunden bei Open Food Facts. ' + (fehlt ? 'Einige Werte fehlen, bitte von der Packung ergänzen.' : 'Kurz mit der Packung vergleichen, dann speichern.'));
+}
+function eanForm(code, v, text, gespeichert) {
+  v = v || {};
+  const wert = x => x == null ? '' : zahl(x, 1);
+  return `<form id="fEan" data-ean="${code}" ${gespeichert ? `data-alt="${esc(v.name)}"` : ''} style="margin-top:14px">
+    <p class="klein" style="margin-top:0">${esc(text)}</p>
+    <label class="feld"><span>Name</span><input name="name" required maxlength="60" value="${esc(v.name || '')}"></label>
+    <div class="gitter">
+      <label class="feld"><span>kcal je 100 g</span><input name="kcal" inputmode="decimal" value="${wert(v.kcal)}"></label>
+      <label class="feld"><span>Eiweiß (g)</span><input name="e" inputmode="decimal" value="${wert(v.e)}"></label>
+      <label class="feld"><span>Kohlenhydrate (g)</span><input name="k" inputmode="decimal" value="${wert(v.k)}"></label>
+      <label class="feld"><span>Fett (g)</span><input name="f" inputmode="decimal" value="${wert(v.f)}"></label>
+    </div>
+    <p class="warn" id="fEanFehler" hidden></p>
+    <button class="knopf" style="width:100%">Speichern und Menge eingeben</button></form>`;
+}
+function zeichneSchnell() {
+  dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf"><button class="knopf2" data-a="zurueck">‹ Zurück</button><button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
+    <h2>Nur Kalorien eintragen</h2>
+    <form id="fSchnell"><label class="feld"><span>Bezeichnung</span><input name="name" maxlength="60" placeholder="z. B. Kantine"></label>
+    <label class="feld"><span>kcal</span><input name="kcal" inputmode="numeric" required></label>
+    <button class="knopf">Eintragen</button></form></div>`;
+}
+function eintragen() {
+  const g = P.g;
+  if (!(g > 0)) { $('menge').focus(); return; }
+  const l = P.lm;
+  if (P.edit) { const e = lies(S.datum).eintraege.find(x => x.id === P.edit); if (e) e.g = g; merke(l.name, g); sichern(); }
+  else fuegeLm(l, g);
+  dlg.close(); render();
+}
+
+/* ---------- Ereignisse ---------- */
+const AKTION = {
+  tab(v) { if (v === 'heute') S.datum = heute(); S.tab = v; render(); scrollTo(0, 0); },
+  gehe(v) { if (v <= heute()) { S.datum = v; render(); } },
+  kalender() { const e = $('dp'); if (e.showPicker) e.showPicker(); else e.click(); },
+  makroUm() { S.makroRest = !S.makroRest; render(); },
+  analyse(v) { S.analyse = v; render(); },
+  fab() {
+    const jetzt = new Date(), min = jetzt.getHours() * 60 + jetzt.getMinutes();
+    let beste = 'snack', abstand = Infinity;
+    for (const [id] of MAHLZEITEN) {
+      const zt = D.zeiten[id]; if (!zt) continue;
+      const [h, m] = zt.split(':').map(Number), d = Math.abs(h * 60 + m - min);
+      if (d < abstand) { abstand = d; beste = id; }
+    }
+    S.tab = 'heute'; render();
+    oeffne(beste, true);
+  },
+  mz(v) { P.m = v; zeichneDlg(); },
+  bereich(v) { S.bereich = Number(v); render(); },
+  neu(v) { oeffne(v); },
+  zu() { dlg.close(); },
+  kat(v) { P.kat = v; P.suche = ''; zeichneDlg(); },
+  wahl(v) { P.lm = lmNach(v); P.g = D.mengen[v] || P.lm.pg || 100; zeichneDlg(); },
+  rezWahl(v) { P.rez = rezNach(v); P.faktor = D.mengen['rez:' + v] || 1; zeichneDlg(); },
+  portion(v) { P.faktor = Number(v); $('portionen').value = zahl(P.faktor, 1); zeigeRezVorschau(); },
+  rezEintragen,
+  rezept(v) { oeffneBau(alsTeile(lies(S.datum).eintraege.filter(e => e.m === v)), null, false); },
+  rezWeg(v) { if (confirm(`Mahlzeit „${v}“ löschen? Bereits Eingetragenes bleibt erhalten.`)) { D.rezepte = D.rezepte.filter(r => r.name !== v); sichern(); render(); } },
+  reiter(v) { P.reiter = v; P.suche = ''; zeichneDlg(); },
+  plusLm(v) { const l = lmNach(v), g = stdMenge(l); fuegeLm(l, g); toast(`✓ ${l.name} · ${mengeText(g, l.einh)} eingetragen`); zeichneListe(); },
+  plusRez(v) { const r = rezNach(v), f = D.mengen['rez:' + v] || 1; fuegeRez(r, f); toast(`✓ ${r.name} eingetragen`); zeichneListe(); },
+  kopierenDlg() { AKTION.kopieren(P.m); toast('✓ Mahlzeit vom Vortag übernommen'); zeichneListe(); },
+  bauNeu() { oeffneBau([], null, true); },
+  bauNeuEigene() { oeffneBau([], null, false); },
+  bauEdit(v) { const r = rezNach(v); if (r) oeffneBau(r.teile, r.name, true); },
+  bauEditEigene(v) { const r = rezNach(v); if (r) oeffneBau(r.teile, r.name, false); },
+  bauAbbruch() { endeBau(); },
+  bauPlus() { P.bau.waehlen = true; P.bau.suche = ''; zeichneDlg(); },
+  bauZurueck() { P.bau.waehlen = false; zeichneDlg(); },
+  bauNimm(v) {
+    const l = lmNach(v); if (!l) return;
+    P.bau.teile.push({ name: l.name, g: stdMenge(l), einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f });
+    P.bau.waehlen = false; zeichneDlg();
+    const fe = dlg.querySelectorAll('[data-bt]'), letztes = fe[fe.length - 1];
+    if (letztes) { letztes.focus(); letztes.select(); }
+  },
+  bauWeg(v) { P.bau.teile.splice(Number(v), 1); zeichneDlg(); },
+  bauSpeichern,
+  bauLoeschen() {
+    const alt = P.bau.alt;
+    if (!confirm(`Mahlzeit „${alt}“ löschen? Bereits Eingetragenes bleibt erhalten.`)) return;
+    D.rezepte = D.rezepte.filter(r => r.name !== alt); sichern(); endeBau(); toast('Mahlzeit gelöscht');
+  },
+  gewichtEingeben() {
+    S.tab = 'heute'; S.datum = heute(); render();
+    const f = $('kg'); f.scrollIntoView({ block: 'center' }); f.focus();
+  },
+  zurueck() { P.lm = null; P.rez = null; P.schnell = false; P.code = null; zeichneDlg(); },
+  code() { P.code = {}; zeichneDlg(); if (matchMedia('(hover:hover)').matches) $('eanFeld').focus(); },
+  kamera() { starteKamera(); },
+  eanSuche() { eanSuche($('eanFeld').value); },
+  fav(v) { D.favoriten = D.favoriten.includes(v) ? D.favoriten.filter(n => n !== v) : [v, ...D.favoriten]; sichern(); zeichneListe(); },
+  menge(v) { P.g = Number(v); $('menge').value = zahl(P.g, 1); zeigeVorschau(); },
+  eintragen,
+  schnell() { P.schnell = true; zeichneDlg(); },
+  bearbeiten(v) {
+    const e = lies(S.datum).eintraege.find(x => x.id === v); if (!e) return;
+    if (e.teile) { P = { m: e.m, edit: e.id, rez: { name: e.name, teile: e.teile }, faktor: e.faktor }; zeichneRezMenge(); dlg.showModal(); return; }
+    const basis = lmNach(e.name);
+    P = { m: e.m, suche: '', kat: null, edit: e.id, g: e.g, schnell: false, lm: { name: e.name, kcal: e.kcal, e: e.e, k: e.k, f: e.f, einh: e.einh, pn: basis ? basis.pn : null, pg: basis ? basis.pg : null } };
+    zeichneDlg(); dlg.showModal();
+  },
+  loeschen(v) { const t = tag(S.datum); t.eintraege = t.eintraege.filter(x => x.id !== v); sichern(); render(); },
+  kopieren(v) {
+    const t = tag(S.datum);
+    lies(plusTage(S.datum, -1)).eintraege.filter(e => e.m === v).forEach(e => t.eintraege.push({ ...e, id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }));
+    sichern(); render();
+  },
+  pset(_, b) {
+    const k = b.dataset.k, v = b.dataset.v;
+    D.profil[k] = k === 'geschlecht' ? v : Number(v);
+    sichern(); render();
+  },
+  eigenWeg(v) { if (confirm(`„${v}" aus deinen Lebensmitteln löschen? Bereits Eingetragenes bleibt erhalten.`)) { D.eigene = D.eigene.filter(x => x.name !== v); sichern(); render(); } },
+  thema() {
+    const neuT = document.documentElement.dataset.thema === 'hell' ? 'dunkel' : 'hell';
+    document.documentElement.dataset.thema = neuT;
+    try { localStorage.setItem('kalorien-thema', neuT); } catch (e) {}
+    render();
+  },
+  export() {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(D, null, 1)], { type: 'application/json' }));
+    a.download = 'kalorien-sicherung-' + heute() + '.json';
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  },
+  import() { $('datei').click(); },
+};
+document.addEventListener('click', ev => {
+  if (ev.target === dlg) { dlg.close(); return; }
+  const b = ev.target.closest('[data-a]');
+  if (b && !b.disabled) AKTION[b.dataset.a](b.dataset.v, b);
+});
+document.addEventListener('input', ev => {
+  const t = ev.target;
+  if (t.id === 'such') { P.suche = t.value; dlg.querySelectorAll('[data-a="kat"]').forEach(c => c.classList.toggle('an', !P.suche && c.dataset.v === P.kat)); zeichneListe(); }
+  else if (t.id === 'menge') { P.g = num(t.value); zeigeVorschau(); }
+  else if (t.id === 'portionen') { const g = num(t.value), ges = rezG(P.rez); P.faktor = g > 0 && ges > 0 ? g / ges : null; zeigeRezVorschau(); }
+  else if (t.id === 'bauName') { P.bau.name = t.value; }
+  else if (t.dataset.bt) { P.bau.teile[Number(t.dataset.bt)].g = num(t.value) || 0; zeigeBauSumme(); }
+  else if (t.id === 'bauSuch') { P.bau.suche = t.value; zeichneBauListe(); }
+  else if (t.dataset.p) { D.profil[t.dataset.p] = num(t.value); sichern(); $('zielAus').innerHTML = zielAusgabe(); }
+});
+document.addEventListener('change', ev => {
+  const t = ev.target;
+  if (t.id === 'dp') { if (t.value && t.value <= heute()) { S.datum = t.value; render(); } }
+  else if (t.id === 'kg') { tag(S.datum).gewicht = num(t.value); sichern(); render(); }
+  else if (t.id === 'manuell') { D.profil.manuell = t.checked; sichern(); $('manuellFeld').hidden = !t.checked; $('zielAus').innerHTML = zielAusgabe(); }
+  else if (t.dataset.z) { D.zeiten[t.dataset.z] = t.value; sichern(); }
+  else if (t.id === 'anaMikro') { if (t.value) { S.analyse = t.value; render(); } }
+  else if (t.id === 'pMz') { P.m = t.value; zeichneListe(); }
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'eanFeld') eanSuche(ev.target.value); else if (ev.key === 'Enter' && ev.target.id === 'menge') eintragen(); else if (ev.key === 'Enter' && ev.target.id === 'portionen') rezEintragen(); });
+document.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const f = new FormData(ev.target), wert = n => num(f.get(n));
+  if (ev.target.id === 'fEan') {
+    const name = (f.get('name') || '').trim(), kcal = wert('kcal'), fe = $('fEanFehler'), alt = ev.target.dataset.alt || null, ean = ev.target.dataset.ean;
+    const zeige = t => { fe.textContent = t; fe.hidden = false; };
+    if (!name) return zeige('Bitte einen Namen angeben.');
+    if (kcal == null || kcal < 0) return zeige('Bitte die kcal je 100 g angeben.');
+    if (name !== alt && (lmNach(name) || rezNach(name))) return zeige('Diesen Namen gibt es schon. Häng z. B. die Sorte an.');
+    const neu = L(name, 'Eigene', kcal, wert('e') || 0, wert('k') || 0, wert('f') || 0); neu.ean = ean;
+    const i = alt ? D.eigene.findIndex(x => x.name === alt) : -1;
+    if (i >= 0) D.eigene[i] = neu; else D.eigene.unshift(neu);
+    sichern(); P.code = null; P.lm = neu; P.g = stdMenge(neu); zeichneDlg();
+    return;
+  }
+  if (ev.target.id === 'fSchnell') {
+    const kcal = wert('kcal'); if (!(kcal > 0)) return;
+    tag(S.datum).eintraege.push({ id: Date.now().toString(36), m: P.m, name: (f.get('name') || '').trim() || 'Schnelleintrag', g: 100, einh: 'g', kcal, e: 0, k: 0, f: 0, schnell: true });
+    sichern(); dlg.close(); render();
+  } else if (ev.target.id === 'fEigen') {
+    const name = f.get('name').trim(), kcal = wert('kcal'), fehler = $('fEigenFehler');
+    const zeige = t => { fehler.textContent = t; fehler.hidden = false; };
+    if (!name) return zeige('Bitte einen Namen angeben.');
+    if (lmNach(name)) return zeige('Diesen Namen gibt es schon.');
+    if (kcal == null || kcal < 0) return zeige('Bitte die kcal je 100 g angeben.');
+    const pn = f.get('pn') || null, pg = wert('pg');
+    if (pn && !(pg > 0)) return zeige('Bitte die Gramm je Portion angeben.');
+    D.eigene.unshift(L(name, 'Eigene', kcal, wert('e') || 0, wert('k') || 0, wert('f') || 0, pn, pn ? pg : null));
+    sichern(); render();
+  }
+});
+$('datei').addEventListener('change', async ev => {
+  const datei = ev.target.files[0]; ev.target.value = '';
+  if (!datei) return;
+  try {
+    const d = JSON.parse(await datei.text());
+    if (!d || typeof d.tage !== 'object' || !d.profil) throw 0;
+    if (!confirm('Sicherung einspielen? Die aktuellen Daten in diesem Browser werden dabei ersetzt.')) return;
+    const n = neu(); D = { ...n, ...d, profil: { ...n.profil, ...d.profil }, zeiten: { ...n.zeiten, ...d.zeiten } };
+    sichern(); render();
+  } catch (e) { alert('Das ist keine gültige Sicherungsdatei.'); }
+});
+const tip = $('tip');
+document.addEventListener('pointermove', zeigeTip);
+document.addEventListener('pointerdown', zeigeTip);
+function zeigeTip(ev) {
+  const z = ev.target.closest && ev.target.closest('[data-tt]');
+  if (!z) { tip.style.display = 'none'; return; }
+  tip.textContent = z.dataset.tt; tip.style.display = 'block';
+  const b = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.max(8, Math.min(innerWidth - b - 8, ev.clientX - b / 2)) + 'px';
+  tip.style.top = Math.max(8, ev.clientY - h - 12) + 'px';
+}
+/* Wochenleiste wischen: eine Woche vor oder zurück */
+let wischX = null;
+document.addEventListener('pointerdown', ev => { wischX = ev.target.closest && ev.target.closest('#woche') ? ev.clientX : null; });
+document.addEventListener('pointerup', ev => {
+  if (wischX == null) return;
+  const dx = ev.clientX - wischX; wischX = null;
+  if (Math.abs(dx) < 50) return;
+  const ziel = plusTage(S.datum, dx < 0 ? 7 : -7);
+  S.datum = ziel > heute() ? heute() : ziel; render();
+});
+let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (S.tab === 'verlauf') zeichneCharts(); }, 150); });
+/* Fertige Mahlzeiten, die einmalig unter „Meine Mahlzeiten“ angelegt werden (gelöscht = bleibt weg) */
+const VORLAGEN_MZ = [
+  { id: 'reispudding-esn', name: 'Reispudding (ESN) mit Whey Kirsche & Himbeeren',
+    teile: [['ESN Designer Rice Pudding (Pulver)', 60], ['Rühls Bestes Whey Konzentrat Kirsche', 30], ['Himbeeren', 80]] },
+];
+function vorlagenEinspielen() {
+  D.vorlagen = D.vorlagen || [];
+  let neu = false;
+  for (const v of VORLAGEN_MZ) {
+    if (D.vorlagen.includes(v.id)) continue;
+    D.vorlagen.push(v.id); neu = true;
+    const teile = v.teile.map(([n, g]) => { const l = lmNach(n); return l && { name: l.name, g, einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f }; });
+    if (teile.every(Boolean) && !rezNach(v.name)) D.rezepte.push({ name: v.name, teile });
+  }
+  /* Zutaten gespeicherter Mahlzeiten auf die aktuellen Nährwerte bringen (Tagebuch-Einträge bleiben, wie sie waren) */
+  for (const r of D.rezepte) for (const t of r.teile) {
+    const l = lmNach(t.name); if (!l) continue;
+    for (const f of ['kcal', 'e', 'k', 'f']) if (t[f] !== l[f]) { t[f] = l[f]; neu = true; }
+  }
+  if (neu) sichern();
+}
+vorlagenEinspielen();
+render();
+</script>
+</body>
+</html>

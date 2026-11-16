@@ -1,0 +1,5 @@
+# Lokale Testdaten und Downloads nicht hochladen
+werkzeug/usda-download/
+*.zip
+Thumbs.db
+desktop.ini

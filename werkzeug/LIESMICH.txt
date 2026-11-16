@@ -1,0 +1,6 @@
+Vitamin-Daten neu erzeugen (nur noetig, wenn neue Lebensmittel in die Grundliste kommen):
+1. USDA-Datei laden: https://fdc.nal.usda.gov/fdc-datasets/FoodData_Central_sr_legacy_food_csv_2018-04.zip
+2. Entpacken nach werkzeug\usda-download\sr\
+3. Neues Lebensmittel in generator.js unter WAHL eintragen (fdc_id ueber suche.js + mapping.json finden)
+4. node generator.js  -> erzeugt mikro-block.js
+5. mikro-block.js in index.html zwischen /*MIKRO_ANFANG*/ und /*MIKRO_ENDE*/ einsetzen
