@@ -16,13 +16,13 @@ try { var t = localStorage.getItem('kalorien-thema'); if (t) document.documentEl
   color-scheme: dark;
   --bg: #121722; --bg2: #24344a; --flaeche: #1e2430; --flaeche2: #2a3240; --ink: #f1f3f6; --ink2: #aeb6c2;
   --linie: #333c4b; --akzent: #5aa2f5; --akzent-ink: #0b1626; --warn: #ff9a5c; --spur: #39434f;
-  --pille: #1e3350; --pille-ink: #7cb8fb; --nav: #1a202b;
+  --pille: #1e3350; --pille-ink: #7cb8fb; --nav: #1a202b; --teal: #3cc4b4; --pink: #f0628a;
 }
 :root[data-thema="hell"] {
   color-scheme: light;
   --bg: #f1f3f7; --bg2: #dfe7f2; --flaeche: #ffffff; --flaeche2: #e9edf3; --ink: #171c24; --ink2: #525b68;
   --linie: #dde2ea; --akzent: #1f6fd6; --akzent-ink: #ffffff; --warn: #bb3f0b; --spur: #e3e7ee;
-  --pille: #dfeafa; --pille-ink: #1a5fb8; --nav: #ffffff;
+  --pille: #dfeafa; --pille-ink: #1a5fb8; --nav: #ffffff; --teal: #0f8a7d; --pink: #c8325c;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -108,6 +108,50 @@ select.chip { -webkit-appearance: none; appearance: none; border: 0; width: auto
 .mz-row label { display: flex; align-items: center; gap: 4px; }
 .mz-row input { text-align: right; padding: 8px; }
 .mz-kopf { padding: 0; }
+.kopf-links { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.zurueck { font-size: 26px; padding: 2px 10px 2px 0; color: var(--ink); }
+.titel.klein-titel { font-size: 22px; }
+.menue-karte { padding-top: 4px; padding-bottom: 4px; }
+.menue { display: flex; align-items: center; gap: 16px; width: 100%; padding: 15px 2px; font-size: 17px; text-align: left; border-bottom: 1px solid var(--linie); }
+.menue:last-child { border-bottom: 0; }
+.menue > svg { color: var(--ink2); flex: none; }
+.menue > span:nth-child(2) { flex: 1; }
+.pfeil { font-size: 26px; color: var(--ink2); line-height: 1; }
+.karte > .zl:first-child, .karte > h2 + .zl { border-top: 0; }
+.ftabs { display: flex; gap: 24px; border-bottom: 1px solid var(--linie); overflow-x: auto; scrollbar-width: none; }
+.ftabs button { padding: 10px 0; color: var(--ink2); font-weight: 600; font-size: 16px; border-bottom: 2px solid transparent; white-space: nowrap; }
+.ftabs button.an { color: var(--ink); border-bottom-color: var(--ink); }
+.karte.ue { overflow: hidden; }
+.ue-kopf { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 12px; text-align: left; }
+.ue-kopf h2 { margin: 0; font-size: 20px; }
+.ue-kcal { display: grid; grid-template-columns: 1fr 1.5fr; gap: 12px; align-items: center; }
+.ue-kcal b { display: block; font-size: 22px; margin-top: 2px; }
+.saeulen { display: flex; justify-content: space-between; gap: 6px; height: 140px; }
+.saeule { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.saeule .spur { flex: 1; width: 100%; max-width: 20px; background: var(--spur); border-radius: 10px; position: relative; overflow: hidden; }
+.saeule .spur i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--akzent); border-radius: 10px; }
+.saeule .spur i.drueber { background: var(--warn); }
+.saeule > span { font-size: 13px; color: var(--ink2); }
+.ue-gew { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
+.gew-werte { display: grid; gap: 10px; }
+.gew-werte b { display: block; font-size: 20px; }
+.ue-gew-info { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.ue-fuss { display: flex; justify-content: space-between; align-items: center; width: calc(100% + 32px); margin: 16px -16px -16px; padding: 16px; background: color-mix(in srgb, var(--akzent) 22%, var(--flaeche)); color: var(--akzent); font-weight: 700; font-size: 16px; }
+.ue-fuss span:last-child { font-size: 24px; line-height: 1; }
+.dlg.f-alle { --tab: var(--akzent); }
+.dlg.f-mahlzeiten { --tab: var(--teal); }
+.dlg.f-lm { --tab: var(--pink); }
+.dlg .reiter button.an { border-bottom-color: var(--tab, var(--akzent)); }
+.band { margin-top: 12px; padding: 12px; border-radius: 16px; background: color-mix(in srgb, var(--tab, var(--akzent)) 16%, transparent); }
+.band .kacheln2 { margin-top: 0; }
+.dlg[class*="f-"] .chip.an { background: var(--tab, var(--akzent)); color: var(--akzent-ink); }
+.band .kachelb { background: var(--flaeche); color: var(--tab, var(--akzent)); }
+.schnellmenue { gap: 14px; }
+.kachelb.gross { color: var(--ink); padding: 18px 8px; }
+.kreis { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; }
+.kreis.blau { background: var(--akzent); color: var(--akzent-ink); }
+.kreis.pink { background: var(--pink); color: #fff; }
+.schnellmenue .menue-karte { background: var(--flaeche2); border-radius: 14px; padding: 0 14px; }
 .chips.tagart { margin-top: 12px; align-items: center; }
 .chips.zeile { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); }
 .chips.zeile::-webkit-scrollbar { display: none; }
@@ -587,8 +631,11 @@ function zieleUebernehmen() {
 }
 
 /* ---------- Oberfläche ---------- */
-const S = { tab: 'heute', datum: heute(), bereich: 30, analyse: 'e' };
-const TABS = [['heute', 'Heute', 'home'], ['verlauf', 'Fortschritt', 'chart'], ['ziele', 'Ziele', 'ziel']];
+const S = { tab: 'heute', datum: heute(), bereich: 30, analyse: 'e', fTab: 'ueberblick' };
+const TABS = [['heute', 'Heute', 'home'], ['verlauf', 'Fortschritt', 'chart'], ['mehr', 'Mehr', 'mehr']];
+/* Unterseiten und wohin „zurück“ führt */
+const UNTER = { ziele: 'mehr', makroziele: 'ziele', zeiten: 'mehr', sicherung: 'mehr' };
+const SEITENTITEL = { verlauf: 'Fortschritt', mehr: 'Mehr', ziele: 'Ziele', makroziele: 'Kalorien- & Makro-Ziele', zeiten: 'Mahlzeiten-Zeiten', sicherung: 'Datensicherung' };
 const ICON = {
   fruehstueck: '<path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 9h1.500a2.500 2.500 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/>',
   mittag: '<path d="M4 10a8 6 0 0 1 16 0z"/><path d="M3 14h18"/><path d="M5 18h14l-1 2H6z"/>',
@@ -599,6 +646,12 @@ const ICON = {
   liste: '<path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/>',
   ziel: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  mehr: '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
+  lupe: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
+  waage: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 10a3 3 0 0 1 6 0"/>',
+  uhr: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  sicherung: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  mond: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
   barcode: '<path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 8v8M11 8v8M14 8v8M16.5 8v8"/>',
   tropfen: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
   blitz: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
@@ -613,19 +666,19 @@ function titelDatum(k) {
   return ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][alsDatum(k).getDay()] + ', ' + kurzDatum(k);
 }
 function render() {
-  const titel = { verlauf: 'Fortschritt', eigene: 'Eigene', ziele: 'Ziele' }[S.tab];
-  $('kopf').innerHTML = (titel ? `<h1 class="titel">${titel}</h1>`
+  const titel = SEITENTITEL[S.tab], zurueck = UNTER[S.tab];
+  $('kopf').innerHTML = (titel ? `<div class="kopf-links">${zurueck ? `<button class="zurueck" data-a="tab" data-v="${zurueck}" aria-label="Zurück">←</button>` : ''}<h1 class="titel${zurueck ? ' klein-titel' : ''}">${titel}</h1></div>`
     : `<button class="titel" data-a="kalender" aria-label="Datum wählen">${titelDatum(S.datum)} <small>▾</small></button>
        <input type="date" id="dp" class="dp" max="${heute()}" value="${S.datum}" tabindex="-1" aria-hidden="true">`)
     + '<button class="rund" data-a="thema" title="Hell / Dunkel" aria-label="Hell oder dunkel umschalten">◐</button>';
-  $('nav').innerHTML = TABS.map(([id, t, ic]) => `<button data-a="tab" data-v="${id}" class="${S.tab === id ? 'an' : ''}">${icon(ic)}<span>${t}</span></button>`).join('')
+  const aktiv = id => S.tab === id || (id === 'mehr' && !!UNTER[S.tab]);
+  $('nav').innerHTML = TABS.map(([id, t, ic]) => `<button data-a="tab" data-v="${id}" class="${aktiv(id) ? 'an' : ''}">${icon(ic)}<span>${t}</span></button>`).join('')
     + `<button class="fab" data-a="fab" aria-label="Eintrag hinzufügen">${icon('plus', 28)}</button>`;
-  const inhalt = ({ heute: viewHeute, verlauf: viewVerlauf, ziele: viewZiele }[S.tab] || viewHeute)();
-  const fehler = speicherFehler ? '<div class="hinweis warn">Speichern im Browser ist fehlgeschlagen. Bitte unter „Ziele" eine Sicherung herunterladen.</div>' : '';
+  const inhalt = ({ heute: viewHeute, verlauf: viewVerlauf, mehr: viewMehr, ziele: viewZiele, makroziele: viewMakroziele, zeiten: viewZeiten, sicherung: viewSicherung }[S.tab] || viewHeute)();
+  const fehler = speicherFehler ? '<div class="hinweis warn">Speichern im Browser ist fehlgeschlagen. Bitte unter Mehr → Datensicherung eine Sicherung herunterladen.</div>' : '';
   $('app').innerHTML = fehler + inhalt;
-  if (S.tab === 'verlauf') zeichneCharts();
+  if (S.tab === 'verlauf' && S.fTab !== 'ueberblick') zeichneCharts();
 }
-
 /* Welches Gericht macht wie viel vom Tag aus */
 function viewAnalyse(t, s, z) {
   if (!t.eintraege.length) return '';
@@ -739,7 +792,7 @@ function viewHeute() {
     h += '</section>';
   }
   const wasser = t.wasser || 0, wz = D.profil.wasserZiel || 3000, liter = v => zahl(v / 1000, 2);
-  h += `<section class="karte"><div class="mahlzeit-kopf"><span class="mz-ic">${icon('tropfen', 26)}</span>
+  h += `<section class="karte" id="wasserKarte"><div class="mahlzeit-kopf"><span class="mz-ic">${icon('tropfen', 26)}</span>
     <div class="mz-t"><b>Wasser</b><span class="klein">${liter(wasser)} von ${liter(wz)} Liter</span></div></div>
     <div class="balken" style="margin:12px 0"><i style="width:${Math.min(100, wasser / wz * 100)}%"></i></div>
     <div class="chips"><button class="chip" data-a="wasser" data-v="250">+ 250 ml</button><button class="chip" data-a="wasser" data-v="500">+ 500 ml</button><button class="chip" data-a="wasser" data-v="1000">+ 1 l</button><button class="chip" data-a="wasser" data-v="-250" ${wasser <= 0 ? 'disabled' : ''}>− 250 ml</button></div></section>`;
@@ -752,6 +805,38 @@ function viewHeute() {
 
 function tageBereich(n) { const ende = heute(); return Array.from({ length: n }, (_, i) => plusTage(ende, i - n + 1)); }
 function viewVerlauf() {
+  const reiter = `<div class="ftabs">${[['ueberblick', 'Überblick'], ['kalorien', 'Kalorien'], ['gewicht', 'Gewicht']].map(([id, t]) => `<button class="${S.fTab === id ? 'an' : ''}" data-a="fTab" data-v="${id}">${t}</button>`).join('')}</div>`;
+  return reiter + (S.fTab === 'ueberblick' ? viewUeberblick() : viewFortDetails());
+}
+const gewichtsTage = () => Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
+function viewUeberblick() {
+  const tage7 = tageBereich(7), daten = tage7.map(k => ({ k, s: summe(lies(k).eintraege), n: lies(k).eintraege.length }));
+  const erf = daten.filter(d => d.n), schnitt = erf.length ? erf.reduce((a, d) => a + d.s.kcal, 0) / erf.length : null;
+  const zz = daten.map(d => ziele(d.k).kcal || 0), max = Math.max(...zz, ...daten.map(d => d.s.kcal), 1);
+  const wt = k => ['S', 'M', 'D', 'M', 'D', 'F', 'S'][alsDatum(k).getDay()];
+  const saeulen = daten.map((d, i) => `<div class="saeule" data-tt="${esc(kurzDatum(d.k) + '\n' + (d.n ? zahl(Math.round(d.s.kcal)) + ' kcal' + (zz[i] ? ' von ' + zahl(zz[i]) : '') : 'nichts erfasst'))}"><div class="spur"><i class="${zz[i] && d.s.kcal > zz[i] ? 'drueber' : ''}" style="height:${d.n ? Math.max(4, d.s.kcal / max * 100) : 0}%"></i></div><span>${wt(d.k)}</span></div>`).join('');
+  const gTage = gewichtsTage(), letzte = gTage[gTage.length - 1];
+  const gStart = gTage.length ? D.tage[gTage[0]].gewicht : D.profil.gewicht, gAkt = letzte ? D.tage[letzte].gewicht : null;
+  const gDiff = gStart != null && gAkt != null ? gAkt - gStart : null, zg = D.profil.zielgewicht;
+  const tageHer = letzte ? Math.round((alsDatum(heute()) - alsDatum(letzte)) / 864e5) : null;
+  const gInfo = !letzte ? 'Noch kein Gewicht eingetragen.'
+    : tageHer > 7 ? 'Es ist schon eine Weile her, seit du dein Gewicht eingetragen hast.'
+    : zg ? (Math.abs(gAkt - zg) < 0.05 ? 'Zielgewicht erreicht.' : `Noch ${zahl(Math.abs(gAkt - zg), 1)} kg bis zu deinem Ziel von ${zahl(zg, 1)} kg.`) : '';
+  const avg = f => erf.length ? erf.reduce((a, d) => a + d.s[f], 0) / erf.length : 0, z = ziele(heute());
+  return `<section class="karte ue"><button class="ue-kopf" data-a="fTab" data-v="kalorien"><h2>Kalorien</h2><span class="pfeil">›</span></button>
+    <div class="ue-kcal"><div><span class="klein">7-Tage-Durchschn.</span><b>${schnitt != null ? zahl(Math.round(schnitt)) + ' kcal' : '–'}</b></div><div class="saeulen">${saeulen}</div></div></section>
+  <section class="karte ue"><button class="ue-kopf" data-a="fTab" data-v="gewicht"><h2>Gewicht</h2><span class="pfeil">›</span></button>
+    <div class="ue-gew"><div class="gew-werte">
+      <div><span class="klein">Start</span><b>${gStart != null ? zahl(gStart, 1) + ' kg' : '–'}</b></div>
+      <div><span class="klein">Aktuell${letzte ? ' (' + kurzDatum(letzte) + ')' : ''}</span><b>${gAkt != null ? zahl(gAkt, 1) + ' kg' : '–'}</b></div>
+      <div><span class="klein">Unterschied</span><b>${gDiff != null ? (gDiff < 0 ? '↘ ' : gDiff > 0 ? '↗ ' : '') + zahl(Math.abs(gDiff), 1) + ' kg' : '–'}</b></div></div>
+      <div class="ue-gew-info"><span class="mz-ic">${icon('waage', 44)}</span><span class="klein">${gInfo}</span></div></div>
+    <button class="ue-fuss" data-a="gewichtEingeben"><span>Mein Gewicht eingeben</span><span>›</span></button></section>
+  <section class="karte ue"><button class="ue-kopf" data-a="fTab" data-v="kalorien"><h2>Makros</h2><span class="pfeil">›</span></button>
+    <div class="klein" style="margin:-4px 0 12px">Durchschnitt der letzten 7 erfassten Tage</div>
+    <div class="makros">${makro('Kohlenhydrate', avg('k'), z.k)}${makro('Fette', avg('f'), z.f)}${makro('Eiweiß', avg('e'), z.e)}</div></section>`;
+}
+function viewFortDetails() {
   const keys = tageBereich(S.bereich), z = ziele(heute(), 'basis');
   const mit = keys.map(k => ({ k, t: lies(k), s: summe(lies(k).eintraege) }));
   const erfasst = mit.filter(x => x.t.eintraege.length);
@@ -760,18 +845,18 @@ function viewVerlauf() {
   const gew = mit.filter(x => x.t.gewicht != null), delta = gew.length > 1 ? gew[gew.length - 1].t.gewicht - gew[0].t.gewicht : null;
   const kachel = (w, l) => `<div class="kachel"><b>${w}</b><span class="klein">${l}</span></div>`;
   let h = `<div class="chips" style="margin-top:14px">${[7, 30, 90].map(b => `<button class="chip ${S.bereich === b ? 'an' : ''}" data-a="bereich" data-v="${b}">${b} Tage</button>`).join('')}</div>`;
-  h += `<div class="kacheln">
+  if (S.fTab === 'kalorien') h += `<div class="kacheln">
     ${kachel(n ? zahl(Math.round(avg('kcal'))) : '–', 'Ø kcal je erfasstem Tag')}
     ${kachel(n ? zahl(Math.round(avg('e'))) + ' g' : '–', 'Ø Eiweiß')}
     ${kachel(imZiel != null ? imZiel + ' / ' + n : n, imZiel != null ? 'Tage im Kalorienziel' : 'erfasste Tage')}
     ${kachel(delta != null ? (delta > 0 ? '+' : delta < 0 ? '−' : '') + zahl(Math.abs(delta), 1) + ' kg' : '–', 'Gewicht im Zeitraum')}</div>`;
-  h += `<section class="karte"><h2>Kalorien je Tag</h2>
+  if (S.fTab === 'kalorien') h += `<section class="karte"><h2>Kalorien je Tag</h2>
     ${z.kcal ? `<div class="legende"><span><i style="background:var(--akzent)"></i>bis Ziel</span><span><i style="background:var(--warn)"></i>über Ziel</span><span>– – ${(D.profil.tagesziele || []).length ? 'Standardziel' : 'Ziel'} ${zahl(z.kcal)} kcal</span></div>` : ''}
     <div class="chart" id="cKcal"></div></section>`;
   const gTage = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
   const gStart = gTage.length ? D.tage[gTage[0]].gewicht : D.profil.gewicht, gAkt = gTage.length ? D.tage[gTage[gTage.length - 1]].gewicht : null;
   const gDiff = gStart != null && gAkt != null ? gAkt - gStart : null;
-  h += `<section class="karte"><h2>Gewicht</h2>
+  if (S.fTab === 'gewicht') h += `<section class="karte"><h2>Gewicht</h2>
     <div class="gew"><div><span class="klein">Start</span><b>${gStart != null ? zahl(gStart, 1) + ' kg' : '–'}</b></div>
       <div><span class="klein">Aktuell${gTage.length ? ' (' + kurzDatum(gTage[gTage.length - 1]) + ')' : ''}</span><b>${gAkt != null ? zahl(gAkt, 1) + ' kg' : '–'}</b></div>
       <div><span class="klein">Unterschied</span><b>${gDiff != null ? (gDiff < 0 ? '↘ ' : gDiff > 0 ? '↗ ' : '') + zahl(Math.abs(gDiff), 1) + ' kg' : '–'}</b></div>
@@ -796,7 +881,8 @@ function zeichneCharts() {
   const leer = t => `<p class="klein">${t}</p>`;
   /* Kalorien: Balken */
   const elK = $('cKcal'), daten = keys.map(k => { const t = lies(k); return t.eintraege.length ? summe(t.eintraege) : null; });
-  if (!daten.some(Boolean)) elK.innerHTML = leer('Noch keine Einträge in diesem Zeitraum.');
+  if (!elK) { /* Kalorien-Diagramm nicht auf dieser Seite */ }
+  else if (!daten.some(Boolean)) elK.innerHTML = leer('Noch keine Einträge in diesem Zeitraum.');
   else {
     const W = Math.max(280, elK.clientWidth), H = 220, L = 44, R = 6, O = 10, U = 26;
     const roh = Math.max(z.kcal || 0, ...daten.map(d => d ? d.kcal : 0)) * 1.08;
@@ -822,6 +908,7 @@ function zeichneCharts() {
   }
   /* Gewicht: Linie */
   const elG = $('cKg'), pkt = keys.map((k, i) => ({ i, k, v: lies(k).gewicht })).filter(p => p.v != null);
+  if (!elG) return;
   if (!pkt.length) { elG.innerHTML = leer('Noch kein Gewicht in diesem Zeitraum. Du trägst es unten auf der Seite „Heute" ein.'); return; }
   const W = Math.max(280, elG.clientWidth), H = 200, L = 44, R = 12, O = 10, U = 26;
   const zg = D.profil.zielgewicht, werte = pkt.map(p => p.v);
@@ -870,11 +957,56 @@ function viewEigene() {
   return h + '</section>';
 }
 
+function viewMehr() {
+  const zeile = (aktion, v, ic, t) => `<button class="menue" data-a="${aktion}" data-v="${v}">${icon(ic, 24)}<span>${t}</span><span class="pfeil">›</span></button>`;
+  return `<section class="karte menue-karte">
+    ${zeile('tab', 'ziele', 'ziel', 'Ziele')}
+    ${zeile('mehrMahlzeiten', '', 'teller', 'Mahlzeiten & Nahrungsmittel')}
+    ${zeile('tab', 'zeiten', 'uhr', 'Mahlzeiten-Zeiten')}
+    ${zeile('tab', 'sicherung', 'sicherung', 'Datensicherung')}
+    ${zeile('thema', '', 'mond', 'Hell / Dunkel')}
+  </section>
+  <p class="klein" style="margin-top:14px">Nährwerte der Grundliste sind Richtwerte, Vitamine aus der USDA-Datenbank, Produkte per Strichcode von Open Food Facts.</p>`;
+}
+/* Ziele als Zeilenliste wie in der Vorlage; jede Zeile öffnet ein kleines Fenster */
+const WOCHENZIELE = [[-1, '1 kg pro Woche abnehmen'], [-0.75, '0,75 kg pro Woche abnehmen'], [-0.5, '0,5 kg pro Woche abnehmen'], [-0.25, '0,25 kg pro Woche abnehmen'], [0, 'Gewicht halten'], [0.25, '0,25 kg pro Woche zunehmen'], [0.5, '0,5 kg pro Woche zunehmen']];
+const wochenzielVon = p => p.wochenziel != null ? p.wochenziel : Math.round((p.strategie || 0) * 7 / 7700 * 4) / 4;
+const FELDER = {
+  geschlecht: { titel: 'Berechnung nach', wahl: [['m', 'männlich'], ['w', 'weiblich']] },
+  alter: { titel: 'Alter', einheit: 'Jahren' },
+  groesse: { titel: 'Größe', einheit: 'cm' },
+  gewicht: { titel: 'Anfangsgewicht', einheit: 'kg', dez: true },
+  zielgewicht: { titel: 'Zielgewicht', einheit: 'kg', dez: true },
+  wochenziel: { titel: 'Wochenziel', wahl: WOCHENZIELE },
+  aktivitaet: { titel: 'Aktivitätsniveau', wahl: AKTIV },
+  wasserZiel: { titel: 'Wasser pro Tag', wahl: [[2000, '2 Liter'], [2500, '2,5 Liter'], [3000, '3 Liter'], [3500, '3,5 Liter'], [4000, '4 Liter']] },
+};
 function viewZiele() {
-  const p = D.profil, wert = v => v == null ? '' : zahl(v, 1);
-  const wahl = (k, liste) => `<div class="chips">${liste.map(([v, t, u]) => `<button class="chip ${String(p[k]) === String(v) ? 'an' : ''}" data-a="pset" data-k="${k}" data-v="${v}" ${u ? `title="${esc(u)}"` : ''}>${t}${k === 'strategie' ? ` <span style="opacity:.8">${u}</span>` : ''}</button>`).join('')}</div>`;
-  const aktHinweis = (AKTIV.find(a => a[0] === p.aktivitaet) || [])[2] || '';
-  const z = ziele(null, 'basis'), b = berechnet();
+  const p = D.profil, gTage = gewichtsTage(), erst = gTage[0], jetzt = aktGewicht();
+  const zeile = (titel, wert, aktion, v, unter) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>${titel}${unter ? `<br><span class="klein">${unter}</span>` : ''}</span><b>${wert}</b></button>`;
+  const kg = v => v != null ? zahl(v, 1) + ' kg' : 'eintragen';
+  const wz = wochenzielVon(p), wzText = (WOCHENZIELE.find(x => x[0] === wz) || [0, (wz < 0 ? zahl(-wz, 2) + ' kg pro Woche abnehmen' : zahl(wz, 2) + ' kg pro Woche zunehmen')])[1];
+  const akt = (AKTIV.find(a => a[0] === p.aktivitaet) || [])[1] || 'wählen';
+  return `<section class="karte">
+    ${erst ? zeile('Anfangsgewicht', `${zahl(D.tage[erst].gewicht, 1)} kg am ${kurzDatum(erst)}${alsDatum(erst).getFullYear()}`, 'feld', 'gewicht') : zeile('Anfangsgewicht', kg(p.gewicht), 'feld', 'gewicht')}
+    ${zeile('Aktuelles Gewicht', kg(jetzt), 'gewichtEingeben', '')}
+    ${zeile('Zielgewicht', kg(p.zielgewicht), 'feld', 'zielgewicht')}
+    ${zeile('Wochenziel', wzText, 'feld', 'wochenziel')}
+    ${zeile('Aktivitätsniveau', akt, 'feld', 'aktivitaet')}
+  </section>
+  <section class="karte"><h2>Für die Berechnung</h2>
+    ${zeile('Berechnung nach', p.geschlecht === 'm' ? 'männlich' : p.geschlecht === 'w' ? 'weiblich' : 'wählen', 'feld', 'geschlecht')}
+    ${zeile('Alter', p.alter ? zahl(p.alter) + ' Jahre' : 'eintragen', 'feld', 'alter')}
+    ${zeile('Größe', p.groesse ? zahl(p.groesse) + ' cm' : 'eintragen', 'feld', 'groesse')}
+  </section>
+  <section class="karte"><h2>Ernährungsziele</h2>
+    ${zeile('Ziele zu Kalorien, Kohlenhydraten, Eiweiß und Fetten', '›', 'tab', 'makroziele', 'Passe dein Standardziel oder Tagesziel an.')}
+    ${zeile('Wasser pro Tag', zahl((p.wasserZiel || 3000) / 1000, 1) + ' l', 'feld', 'wasserZiel')}
+  </section>
+  <p class="klein">Der Bedarf ist eine Schätzung (Mifflin-St-Jeor × Aktivität). Bleibt das Gewicht über 2–3 Wochen anders als geplant, stell das Ziel nach.</p>`;
+}
+function viewMakroziele() {
+  const p = D.profil, z = ziele(null, 'basis'), b = berechnet();
   const zeilen = (kcal, proz, aktion, v, hinweis) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>Kalorien${hinweis ? ` <span class="klein">${hinweis}</span>` : ''}</span><b>${kcal ? zahl(kcal) : '–'}</b></button>`
     + [['k', 'Kohlenhydrate'], ['e', 'Eiweiß'], ['f', 'Fette']].map(([m, n]) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>${n} <span class="klein">${kcal ? zahl(gramm(kcal, proz[m], m)) + ' g' : ''}</span></span><b>${zahl(proz[m], 1)} %</b></button>`).join('');
   const tz = p.tagesziele || [];
@@ -884,33 +1016,23 @@ function viewZiele() {
   <section class="karte"><h2>Tagesziele setzen</h2>
     <p class="klein" style="margin:0 0 4px">Eigene Ziele für bestimmte Wochentage, zum Beispiel für deine Trainingstage. An allen anderen Tagen gilt das Standardziel.</p>
     ${tz.map((t, i) => `<div class="tz-kopf"><b>${tageText(t.tage)}</b></div>${zeilen(t.kcal, t.proz, 'tzEdit', i)}`).join('')}
-    <button class="link" data-a="tzNeu">+ Tagesziel hinzufügen</button></section>
-  <section class="karte"><h2>Deine Daten</h2>
-    <div class="feld"><span>Berechnung nach</span>${wahl('geschlecht', [['m', 'männlich'], ['w', 'weiblich']])}</div>
-    <div class="gitter">
-      <label class="feld"><span>Alter</span><input data-p="alter" inputmode="numeric" value="${wert(p.alter)}"></label>
-      <label class="feld"><span>Größe (cm)</span><input data-p="groesse" inputmode="numeric" value="${wert(p.groesse)}"></label>
-      <label class="feld"><span>Gewicht (kg)</span><input data-p="gewicht" inputmode="decimal" value="${wert(p.gewicht)}"></label>
-      <label class="feld"><span>Zielgewicht (kg)</span><input data-p="zielgewicht" inputmode="decimal" value="${wert(p.zielgewicht)}"></label>
-    </div>
-    <p class="klein" style="margin-top:0">Sobald du auf der Seite „Heute" ein Gewicht einträgst, rechnet die App automatisch mit dem neuesten Wert.</p>
-    <div class="feld"><span>Aktivität</span>${wahl('aktivitaet', AKTIV)}<div class="klein" style="margin-top:4px">${esc(aktHinweis)}</div></div>
-    <div class="feld"><span>Vorhaben</span>${wahl('strategie', STRATEGIEN)}</div>
-    <div class="feld"><span>Wasser pro Tag</span>${wahl('wasserZiel', [[2000, '2 l'], [2500, '2,5 l'], [3000, '3 l'], [3500, '3,5 l'], [4000, '4 l']])}</div>
-  </section>
-  <section class="karte"><h2>Mahlzeiten-Zeiten</h2>
-    <p class="klein" style="margin-top:0">Steht im Tagebuch dabei, und der Plus-Knopf unten schlägt dir die Mahlzeit vor, deren Zeit am nächsten liegt.</p>
+    <button class="link" data-a="tzNeu">+ Tagesziel hinzufügen</button></section>`;
+}
+function viewZeiten() {
+  return `<section class="karte">
+    <p class="klein" style="margin-top:0">Steht im Tagebuch dabei, und der Plus-Knopf schlägt dir die Mahlzeit vor, deren Zeit am nächsten liegt.</p>
     <div class="gitter">${MAHLZEITEN.map(([id, t]) => `<label class="feld"><span>${t}</span><input type="time" data-z="${id}" value="${esc(D.zeiten[id] || '')}"></label>`).join('')}</div>
-  </section>
-  <section class="karte"><h2>Datensicherung</h2>
+  </section>`;
+}
+function viewSicherung() {
+  return `<section class="karte">
     <p class="klein" style="margin-top:0">Deine Daten liegen nur in diesem Browser. Die Sicherung nimmst du auch für den Abgleich zwischen PC und Handy.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="knopf2" data-a="export">Sicherung herunterladen</button><button class="knopf2" data-a="import">Sicherung einspielen</button></div>
-  </section>
-  <p class="klein">Nährwerte der Grundliste sind Richtwerte. Der Bedarf ist eine Schätzung (Mifflin-St-Jeor × Aktivität): Bleibt das Gewicht über 2–3 Wochen anders als geplant, stell das Ziel nach.</p>`;
+  </section>`;
 }
 function zielAusgabe() {
   const z = ziele(null, 'basis'), p = D.profil;
-  if (!z.kcal) return 'Trag unten deine Daten ein, dann rechnet die App ein Ziel aus. Oder tipp auf „Kalorien“ und leg es selbst fest.';
+  if (!z.kcal) return 'Trag unter Ziele dein Gewicht, Alter und deine Größe ein, dann rechnet die App ein Ziel aus. Oder tipp auf „Kalorien“ und leg es selbst fest.';
   const zeilen = [];
   if (z.tdee) zeilen.push(`Geschätzter Verbrauch ${zahl(Math.round(z.tdee / 10) * 10)} kcal · Grundumsatz ${zahl(Math.round(z.bmr / 10) * 10)} kcal${p.zielKcal && z.empfohlen ? ` · berechnet wären ${zahl(z.empfohlen)} kcal` : ''}`);
   if (z.tdee) {
@@ -946,7 +1068,7 @@ function zeichneDlg() {
   if (P.bau) return zeichneBau();
   if (P.rez) return zeichneRezMenge();
   if (P.lm) return zeichneMenge();
-  dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="weg" data-a="zu" aria-label="Schließen">←</button>
+  dlg.innerHTML = `<div class="dlg voll f-${P.reiter}"><div class="dlg-kopf"><button class="weg" data-a="zu" aria-label="Schließen">←</button>
     <select id="pMz" class="titel-sel" aria-label="In welche Mahlzeit eintragen">${MAHLZEITEN.map(([id, t]) => `<option value="${id}" ${P.m === id ? 'selected' : ''}>${t}</option>`).join('')}</select>
     <span style="width:32px"></span></div>
     <input id="such" placeholder="Nahrungsmittel oder Mahlzeit suchen" value="${esc(P.suche)}" autocomplete="off">
@@ -956,7 +1078,7 @@ function zeichneDlg() {
 }
 const stdMenge = x => D.mengen[x.name] || x.pg || 100;
 function kachelReihe(liste) {
-  return `<div class="kacheln2">${liste.map(([a, ic, t, aus]) => `<button class="kachelb" data-a="${a}" ${aus ? 'disabled' : ''}>${icon(ic, 30)}<span>${t}</span></button>`).join('')}</div>`;
+  return `<div class="band"><div class="kacheln2">${liste.map(([a, ic, t, aus]) => `<button class="kachelb" data-a="${a}" ${aus ? 'disabled' : ''}>${icon(ic, 30)}<span>${t}</span></button>`).join('')}</div></div>`;
 }
 function lmZeile(x) {
   const g = stdMenge(x), fav = D.favoriten.includes(x.name);
@@ -988,9 +1110,8 @@ function zeichneListe() {
       : leer('Noch keine eigenen Mahlzeiten. Tippe auf „Mahlzeit erstellen", gib einen Namen ein und füge die Zutaten mit Gramm hinzu.'));
   } else {
     const kats = ['Favoriten', 'Eigene', ...KATEGORIEN];
-    h = `<div class="chips zeile" style="margin-top:12px">${kats.map(k => `<button class="chip ${P.kat === k ? 'an' : ''}" data-a="kat" data-v="${esc(k)}">${esc(k)}</button>`).join('')}</div>`;
+    h = kachelReihe([['eigenNeu', 'plus', 'Nahrungsmittel erstellen'], ['schnell', 'blitz', 'Schnell hinzufügen']]) + `<div class="chips zeile" style="margin-top:12px">${kats.map(k => `<button class="chip ${P.kat === k ? 'an' : ''}" data-a="kat" data-v="${esc(k)}">${esc(k)}</button>`).join('')}</div>`;
     const liste = P.kat === 'Favoriten' ? D.favoriten.map(lmNach).filter(Boolean) : P.kat === 'Eigene' ? D.eigene : GRUND.filter(x => x.kat === P.kat);
-    if (P.kat === 'Eigene') h += kachelReihe([['eigenNeu', 'plus', 'Eigenes Nahrungsmittel anlegen'], ['code', 'barcode', 'Per Strichcode anlegen']]);
     h += liste.map(lmZeile).join('') || leer(P.kat === 'Favoriten' ? 'Noch keine Favoriten. Tippe bei einem Nahrungsmittel auf ☆.' : 'Noch keine eigenen Nahrungsmittel. Leg oben eins an, die Werte stehen hinten auf der Packung.');
   }
   $('pl').innerHTML = h;
@@ -1256,6 +1377,42 @@ function zeichneEigen() {
     ${alt ? `<button class="knopf2" data-a="eigenLoeschen" data-v="${esc(alt.name)}" style="width:100%;margin-top:10px">Löschen</button>` : ''}</div></div>`;
   const f = dlg.querySelector('#fEan [name=name]'); if (f && !alt && matchMedia('(hover:hover)').matches) f.focus();
 }
+function oeffneFeld(key) { P = { feld: key }; zeichneFeldDlg(); if (!dlg.open) dlg.showModal(); }
+function zeichneFeldDlg() {
+  const key = P.feld, d = FELDER[key], p = D.profil;
+  const aktuell = key === 'wochenziel' ? wochenzielVon(p) : p[key];
+  dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf"><h2>${d.titel}</h2><button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
+    ${d.wahl ? `<div class="liste" style="min-height:0">${d.wahl.map(([v, t, u]) => `<button class="zl" data-a="feldWahl" data-v="${v}"><span>${t}${u ? `<br><span class="klein">${esc(u)}</span>` : ''}</span><b>${String(aktuell) === String(v) ? '✓' : ''}</b></button>`).join('')}</div>`
+      : `<label class="feld" style="margin:0"><span>${d.titel} in ${d.einheit}</span><input id="feldWert" inputmode="${d.dez ? 'decimal' : 'numeric'}" value="${aktuell != null ? zahl(aktuell, 1) : ''}"></label>
+        <p class="warn" id="feldFehler" style="margin:0" hidden></p><button class="knopf" data-a="feldSpeichern">Speichern</button>`}</div>`;
+  const f = $('feldWert'); if (f) { f.focus(); f.select(); }
+}
+function feldSetzen(key, v) {
+  const p = D.profil;
+  if (key === 'wochenziel') { p.wochenziel = v; p.strategie = Math.round(v * 7700 / 7 / 10) * 10; } else p[key] = v;
+  sichern(); dlg.close(); render(); toast('✓ Gespeichert');
+}
+function besteMahlzeit() {
+  const jetzt = new Date(), min = jetzt.getHours() * 60 + jetzt.getMinutes();
+  let beste = 'snack', abstand = Infinity;
+  for (const [id] of MAHLZEITEN) {
+    const zt = D.zeiten[id]; if (!zt) continue;
+    const [hh, mm] = zt.split(':').map(Number), d = Math.abs(hh * 60 + mm - min);
+    if (d < abstand) { abstand = d; beste = id; }
+  }
+  return beste;
+}
+function zeichneSchnellmenue() {
+  dlg.innerHTML = `<div class="dlg schnellmenue">
+    <div class="kacheln2" style="margin-top:0">
+      <button class="kachelb gross" data-a="aufzeichnen"><span class="kreis blau">${icon('lupe', 24)}</span><span>Nahrungsmittel aufzeichnen</span></button>
+      <button class="kachelb gross" data-a="aufzeichnenCode"><span class="kreis pink">${icon('barcode', 24)}</span><span>Strichcode scannen</span></button>
+    </div>
+    <div class="menue-karte">
+      <button class="menue" data-a="sheetWasser"><span class="mz-ic">${icon('tropfen', 24)}</span><span>Wasser</span></button>
+      <button class="menue" data-a="sheetGewicht"><span class="mz-ic" style="color:var(--teal)">${icon('waage', 24)}</span><span>Gewicht</span></button>
+    </div></div>`;
+}
 function zeichneSchnell() {
   dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf"><button class="knopf2" data-a="zurueck">‹ Zurück</button><button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
     <h2>Nur Kalorien eintragen</h2>
@@ -1297,16 +1454,19 @@ const AKTION = {
   wasser(v) { const t = tag(S.datum); t.wasser = Math.max(0, (t.wasser || 0) + Number(v)); sichern(); render(); },
   makroUm() { S.makroRest = !S.makroRest; render(); },
   analyse(v) { S.analyse = v; render(); },
-  fab() {
-    const jetzt = new Date(), min = jetzt.getHours() * 60 + jetzt.getMinutes();
-    let beste = 'snack', abstand = Infinity;
-    for (const [id] of MAHLZEITEN) {
-      const zt = D.zeiten[id]; if (!zt) continue;
-      const [h, m] = zt.split(':').map(Number), d = Math.abs(h * 60 + m - min);
-      if (d < abstand) { abstand = d; beste = id; }
-    }
-    S.tab = 'heute'; render();
-    oeffne(beste, true);
+  fab() { P = { sheet: true }; zeichneSchnellmenue(); if (!dlg.open) dlg.showModal(); },
+  aufzeichnen() { S.tab = 'heute'; render(); oeffne(besteMahlzeit(), true); },
+  aufzeichnenCode() { S.tab = 'heute'; render(); oeffne(besteMahlzeit(), true); P.code = {}; zeichneDlg(); if (matchMedia('(hover:hover)').matches) $('eanFeld').focus(); },
+  sheetWasser() { dlg.close(); S.tab = 'heute'; render(); const k = $('wasserKarte'); if (k) k.scrollIntoView({ block: 'center' }); },
+  sheetGewicht() { dlg.close(); AKTION.gewichtEingeben(); },
+  mehrMahlzeiten() { oeffne('fruehstueck'); P.reiter = 'mahlzeiten'; zeichneDlg(); },
+  fTab(v) { S.fTab = v; render(); scrollTo(0, 0); },
+  feld(v) { oeffneFeld(v); },
+  feldWahl(v) { const key = P.feld; feldSetzen(key, key === 'geschlecht' ? v : Number(v)); },
+  feldSpeichern() {
+    const v = num($('feldWert').value), fe = $('feldFehler');
+    if (!(v > 0)) { fe.textContent = 'Bitte eine Zahl eingeben.'; fe.hidden = false; return; }
+    feldSetzen(P.feld, v);
   },
   mz(v) { P.m = v; zeichneDlg(); },
   bereich(v) { S.bereich = Number(v); render(); },
@@ -1424,7 +1584,7 @@ document.addEventListener('change', ev => {
   else if (t.dataset && t.dataset.p) { render(); }
   else if (t.id === 'pMz') { P.m = t.value; zeichneListe(); }
 });
-document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'eanFeld') eanSuche(ev.target.value); else if (ev.key === 'Enter' && ev.target.id === 'menge') eintragen(); else if (ev.key === 'Enter' && ev.target.id === 'portionen') rezEintragen(); });
+document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'feldWert') AKTION.feldSpeichern(); else if (ev.key === 'Enter' && ev.target.id === 'eanFeld') eanSuche(ev.target.value); else if (ev.key === 'Enter' && ev.target.id === 'menge') eintragen(); else if (ev.key === 'Enter' && ev.target.id === 'portionen') rezEintragen(); });
 document.addEventListener('submit', ev => {
   ev.preventDefault();
   const f = new FormData(ev.target), wert = n => num(f.get(n));
