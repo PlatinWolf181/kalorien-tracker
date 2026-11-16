@@ -588,7 +588,7 @@ function zieleUebernehmen() {
 
 /* ---------- Oberfläche ---------- */
 const S = { tab: 'heute', datum: heute(), bereich: 30, analyse: 'e' };
-const TABS = [['heute', 'Heute', 'home'], ['verlauf', 'Fortschritt', 'chart'], ['eigene', 'Eigene', 'liste'], ['ziele', 'Ziele', 'ziel']];
+const TABS = [['heute', 'Heute', 'home'], ['verlauf', 'Fortschritt', 'chart'], ['ziele', 'Ziele', 'ziel']];
 const ICON = {
   fruehstueck: '<path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 9h1.500a2.500 2.500 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/>',
   mittag: '<path d="M4 10a8 6 0 0 1 16 0z"/><path d="M3 14h18"/><path d="M5 18h14l-1 2H6z"/>',
@@ -620,7 +620,7 @@ function render() {
     + '<button class="rund" data-a="thema" title="Hell / Dunkel" aria-label="Hell oder dunkel umschalten">◐</button>';
   $('nav').innerHTML = TABS.map(([id, t, ic]) => `<button data-a="tab" data-v="${id}" class="${S.tab === id ? 'an' : ''}">${icon(ic)}<span>${t}</span></button>`).join('')
     + `<button class="fab" data-a="fab" aria-label="Eintrag hinzufügen">${icon('plus', 28)}</button>`;
-  const inhalt = { heute: viewHeute, verlauf: viewVerlauf, eigene: viewEigene, ziele: viewZiele }[S.tab]();
+  const inhalt = ({ heute: viewHeute, verlauf: viewVerlauf, ziele: viewZiele }[S.tab] || viewHeute)();
   const fehler = speicherFehler ? '<div class="hinweis warn">Speichern im Browser ist fehlgeschlagen. Bitte unter „Ziele" eine Sicherung herunterladen.</div>' : '';
   $('app').innerHTML = fehler + inhalt;
   if (S.tab === 'verlauf') zeichneCharts();
@@ -940,6 +940,7 @@ function oeffne(m, fab) {
 function titelM() { return (MAHLZEITEN.find(x => x[0] === P.m) || [])[1]; }
 function zeichneDlg() {
   stopKamera();
+  if (P.eigen) return zeichneEigen();
   if (P.code) return zeichneCode();
   if (P.schnell) return zeichneSchnell();
   if (P.bau) return zeichneBau();
@@ -974,7 +975,7 @@ function zeichneListe() {
   if (P.suche.trim()) {
     const q = norm(P.suche.trim());
     h = D.rezepte.filter(r => norm(r.name).includes(q)).map(rezZeile).join('') + alleLM().filter(x => norm(x.name).includes(q)).map(lmZeile).join('')
-      || leer('Nichts gefunden. Eigene Nahrungsmittel legst du im Reiter „Eigene" an.');
+      || leer('Nichts gefunden. Unter Nahrungsmittel → Eigene kannst du es selbst anlegen.');
   } else if (P.reiter === 'alle') {
     h = kachelReihe([['code', 'barcode', 'Strichcode einscannen'], ['schnell', 'blitz', 'Schnell hinzufügen']]);
     const verlauf = D.zuletzt.map(n => n.startsWith('rez:') ? { r: rezNach(n.slice(4)) } : { l: lmNach(n) }).filter(x => x.r || x.l);
@@ -989,7 +990,8 @@ function zeichneListe() {
     const kats = ['Favoriten', 'Eigene', ...KATEGORIEN];
     h = `<div class="chips zeile" style="margin-top:12px">${kats.map(k => `<button class="chip ${P.kat === k ? 'an' : ''}" data-a="kat" data-v="${esc(k)}">${esc(k)}</button>`).join('')}</div>`;
     const liste = P.kat === 'Favoriten' ? D.favoriten.map(lmNach).filter(Boolean) : P.kat === 'Eigene' ? D.eigene : GRUND.filter(x => x.kat === P.kat);
-    h += liste.map(lmZeile).join('') || leer(P.kat === 'Favoriten' ? 'Noch keine Favoriten. Tippe bei einem Nahrungsmittel auf ☆.' : 'Noch keine eigenen Nahrungsmittel. Anlegen im Reiter „Eigene".');
+    if (P.kat === 'Eigene') h += kachelReihe([['eigenNeu', 'plus', 'Eigenes Nahrungsmittel anlegen'], ['code', 'barcode', 'Per Strichcode anlegen']]);
+    h += liste.map(lmZeile).join('') || leer(P.kat === 'Favoriten' ? 'Noch keine Favoriten. Tippe bei einem Nahrungsmittel auf ☆.' : 'Noch keine eigenen Nahrungsmittel. Leg oben eins an, die Werte stehen hinten auf der Packung.');
   }
   $('pl').innerHTML = h;
 }
@@ -999,7 +1001,7 @@ function zeichneMenge() {
     <h2>${esc(l.name)}</h2>
     <label class="feld" style="margin:0"><span>Menge in ${l.einh}</span><input id="menge" inputmode="decimal" value="${zahl(P.g, 1)}"></label>
     <div class="vorschau" id="vs"></div>
-    <button class="knopf" data-a="eintragen">${P.edit ? 'Speichern' : 'Eintragen'}</button></div>`;
+    <div style="display:flex;gap:8px">${!P.edit && D.eigene.some(x => x.name === l.name) ? `<button class="knopf2" data-a="eigenEdit" data-v="${esc(l.name)}">Bearbeiten</button>` : ''}<button class="knopf" data-a="eintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
   zeigeVorschau();
 }
 function vorschauHtml(wVon) {
@@ -1247,6 +1249,13 @@ function zdSpeichern() {
   }
   sichern(); dlg.close(); render(); toast('✓ Ziel gespeichert');
 }
+function zeichneEigen() {
+  const alt = P.eigen.alt;
+  dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="knopf2" data-a="eigenZurueck">‹ Zurück</button><h2>${alt ? 'Bearbeiten' : 'Eigenes Nahrungsmittel'}</h2><span style="width:60px"></span></div>
+    <div class="liste">${eanForm(alt && alt.ean ? alt.ean : '', alt || null, alt ? 'Werte je 100 g. Was schon im Tagebuch steht, bleibt unverändert.' : 'Die Werte je 100 g stehen hinten auf der Packung.', !!alt)}
+    ${alt ? `<button class="knopf2" data-a="eigenLoeschen" data-v="${esc(alt.name)}" style="width:100%;margin-top:10px">Löschen</button>` : ''}</div></div>`;
+  const f = dlg.querySelector('#fEan [name=name]'); if (f && !alt && matchMedia('(hover:hover)').matches) f.focus();
+}
 function zeichneSchnell() {
   dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf"><button class="knopf2" data-a="zurueck">‹ Zurück</button><button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
     <h2>Nur Kalorien eintragen</h2>
@@ -1268,6 +1277,14 @@ const AKTION = {
   tab(v) { if (v === 'heute') S.datum = heute(); S.tab = v; render(); scrollTo(0, 0); },
   gehe(v) { if (v <= heute()) { S.datum = v; render(); } },
   kalender() { const e = $('dp'); if (e.showPicker) e.showPicker(); else e.click(); },
+  eigenNeu() { P.eigen = { alt: null }; zeichneDlg(); },
+  eigenEdit(v) { const l = D.eigene.find(x => x.name === v); if (l) { P.eigen = { alt: l }; zeichneDlg(); } },
+  eigenZurueck() { P.eigen = null; P.lm = null; zeichneDlg(); },
+  eigenLoeschen(v) {
+    if (!confirm(`„${v}“ löschen? Was schon im Tagebuch steht, bleibt erhalten.`)) return;
+    D.eigene = D.eigene.filter(x => x.name !== v); D.favoriten = D.favoriten.filter(n => n !== v);
+    sichern(); P.eigen = null; P.lm = null; P.reiter = 'lm'; P.kat = 'Eigene'; zeichneDlg(); toast('Gelöscht');
+  },
   zielStd() { oeffneZiel('std'); },
   tzNeu() { oeffneZiel('neu'); },
   tzEdit(v) { oeffneZiel(Number(v)); },
@@ -1417,10 +1434,10 @@ document.addEventListener('submit', ev => {
     if (!name) return zeige('Bitte einen Namen angeben.');
     if (kcal == null || kcal < 0) return zeige('Bitte die kcal je 100 g angeben.');
     if (name !== alt && (lmNach(name) || rezNach(name))) return zeige('Diesen Namen gibt es schon. Häng z. B. die Sorte an.');
-    const neu = L(name, 'Eigene', kcal, wert('e') || 0, wert('k') || 0, wert('f') || 0); neu.ean = ean;
+    const neu = L(name, 'Eigene', kcal, wert('e') || 0, wert('k') || 0, wert('f') || 0); if (ean) neu.ean = ean;
     const i = alt ? D.eigene.findIndex(x => x.name === alt) : -1;
     if (i >= 0) D.eigene[i] = neu; else D.eigene.unshift(neu);
-    sichern(); P.code = null; P.lm = neu; P.g = stdMenge(neu); zeichneDlg();
+    sichern(); P.code = null; P.eigen = null; P.lm = neu; P.g = stdMenge(neu); zeichneDlg(); toast(alt ? '✓ Geändert' : '✓ Gespeichert');
     return;
   }
   if (ev.target.id === 'fSchnell') {
