@@ -99,6 +99,7 @@ select.chip { -webkit-appearance: none; appearance: none; border: 0; width: auto
 .feld > span { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; }
 .gitter { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0 12px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips.tagart { margin-top: 12px; align-items: center; }
 .chips.zeile { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); }
 .chips.zeile::-webkit-scrollbar { display: none; }
 .chips.zeile .chip { flex: none; }
@@ -456,7 +457,7 @@ const KEY = 'kalorien-tracker';
 function neu() {
   return {
     version: 1,
-    profil: { geschlecht: null, alter: null, groesse: null, gewicht: null, zielgewicht: null, aktivitaet: 1.75, strategie: -500, manuell: false, kcalManuell: null },
+    profil: { geschlecht: null, alter: null, groesse: null, gewicht: null, zielgewicht: null, aktivitaet: 1.75, strategie: -500, manuell: false, kcalManuell: null, trainingsTage: [], trainingPlus: 0, wasserZiel: 3000 },
     zeiten: { fruehstueck: '06:30', mittag: '12:00', abend: '18:30', snack: '15:30' },
     tage: {}, eigene: [], rezepte: [], favoriten: [], zuletzt: [], mengen: {}
   };
@@ -536,7 +537,13 @@ function aktGewicht() {
   const ks = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
   return ks.length ? D.tage[ks[ks.length - 1]].gewicht : D.profil.gewicht;
 }
-function ziele() {
+/* Tagesziel für ein Datum. modus 'basis' = Wochendurchschnitt ohne Trainings-/Ruhetag-Ausgleich */
+function trainingAm(datum) {
+  const t = lies(datum).training;
+  return t != null ? t : (D.profil.trainingsTage || []).includes(alsDatum(datum).getDay());
+}
+function ziele(datum, modus) {
+  datum = datum || S.datum;
   const p = D.profil, kg = aktGewicht();
   const komplett = p.geschlecht && p.alter && p.groesse && kg;
   let bmr = null, tdee = null, kcal = null;
@@ -546,12 +553,19 @@ function ziele() {
     kcal = Math.round((tdee + p.strategie) / 10) * 10;
   }
   if (p.manuell && p.kcalManuell) kcal = p.kcalManuell;
+  const basis = kcal, plus = p.trainingPlus || 0, n = (p.trainingsTage || []).length;
+  const ruheMinus = n > 0 && n < 7 ? plus * n / (7 - n) : 0;
+  let training = null;
+  if (kcal && plus > 0 && modus !== 'basis') {
+    training = trainingAm(datum);
+    kcal = Math.round((kcal + (training ? plus : -ruheMinus)) / 10) * 10;
+  }
   let e = null, f = null, k = null;
   if (kg && kcal) {
     e = Math.round(kg * 2); f = Math.round(kg * 0.8);
     k = Math.max(0, Math.round((kcal - 4 * e - 9 * f) / 4));
   }
-  return { kcal, e, k, f, bmr, tdee, kg };
+  return { kcal, basis, training, plus, ruheMinus, e, k, f, bmr, tdee, kg };
 }
 
 /* ---------- Oberfläche ---------- */
@@ -568,6 +582,7 @@ const ICON = {
   ziel: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   barcode: '<path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 8v8M11 8v8M14 8v8M16.5 8v8"/>',
+  tropfen: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
   blitz: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   teller: '<path d="M3 11h18a9 9 0 0 1-18 0z"/><path d="M9 7c0-2 2-2 2-4M14 7c0-2 2-2 2-4"/>',
   kopie: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
@@ -646,10 +661,10 @@ function wochenLeiste(z) {
   const mo = plusTage(S.datum, -((alsDatum(S.datum).getDay() + 6) % 7)), ht = heute(), r = 12.5, u = 2 * Math.PI * r;
   return '<div class="woche" id="woche">' + ['M', 'D', 'M', 'D', 'F', 'S', 'S'].map((b, i) => {
     const k = plusTage(mo, i), kcal = summe(lies(k).eintraege).kcal;
-    const anteil = kcal > 0 ? (z.kcal ? Math.min(1, kcal / z.kcal) : 1) : 0;
+    const zk = ziele(k).kcal, anteil = kcal > 0 ? (zk ? Math.min(1, kcal / zk) : 1) : 0;
     return `<button class="wt ${k === S.datum ? 'an' : ''}" data-a="gehe" data-v="${k}" ${k > ht ? 'disabled' : ''} aria-label="${langDatum(k)}"><i></i><span>${b}</span>
       <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="${r}" fill="none" stroke="currentColor" stroke-width="2" ${k === ht && !kcal ? 'stroke-dasharray="4 3"' : ''}/>
-      ${anteil ? `<circle cx="16" cy="16" r="${r}" fill="none" stroke="${z.kcal && kcal > z.kcal ? 'var(--warn)' : 'var(--akzent)'}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(anteil * u).toFixed(1)} ${u.toFixed(1)}" transform="rotate(-90 16 16)"/>` : ''}</svg></button>`;
+      ${anteil ? `<circle cx="16" cy="16" r="${r}" fill="none" stroke="${zk && kcal > zk ? 'var(--warn)' : 'var(--akzent)'}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(anteil * u).toFixed(1)} ${u.toFixed(1)}" transform="rotate(-90 16 16)"/>` : ''}</svg></button>`;
   }).join('') + '</div>';
 }
 /* Fortschrittsring: g = Größe, dicke = Strichstärke, anteil 0–1 */
@@ -675,6 +690,8 @@ function viewHeute() {
   const t = lies(S.datum), s = summe(t.eintraege), z = ziele(), vortagK = plusTage(S.datum, -1), vortag = lies(vortagK);
   const vortagName = alsDatum(vortagK).toLocaleDateString('de-DE', { weekday: 'long' });
   let h = wochenLeiste(z);
+  if (z.kcal && z.plus > 0) h += `<div class="chips tagart"><button class="chip ${z.training ? 'an' : ''}" data-a="trainTag" data-v="1">Trainingstag</button><button class="chip ${z.training ? '' : 'an'}" data-a="trainTag" data-v="0">Ruhetag</button>
+    <span class="klein">${z.training ? '+' + zahl(z.plus) + ' kcal, mehr Kohlenhydrate' : '−' + zahl(Math.round(z.ruheMinus / 10) * 10) + ' kcal, weniger Kohlenhydrate'}</span></div>`;
   if (!z.kcal) h += `<div class="hinweis"><span>Trag einmal deine Daten ein, dann rechnet die App dein Tagesziel aus.</span><button class="knopf" data-a="tab" data-v="ziele">Ziele</button></div>`;
   const rest = z.kcal ? Math.round(z.kcal - s.kcal) : null;
   h += `<section class="karte"><div class="kcal-wrap">
@@ -704,6 +721,11 @@ function viewHeute() {
     if (alsTeile(liste).length >= 2) h += `<button class="erneut" data-a="rezept" data-v="${id}"><span>Als eigene Mahlzeit speichern<br><span class="klein" style="font-weight:400">diese Zutaten unter einem Namen merken</span></span><span class="plus">+</span></button>`;
     h += '</section>';
   }
+  const wasser = t.wasser || 0, wz = D.profil.wasserZiel || 3000, liter = v => zahl(v / 1000, 2);
+  h += `<section class="karte"><div class="mahlzeit-kopf"><span class="mz-ic">${icon('tropfen', 26)}</span>
+    <div class="mz-t"><b>Wasser</b><span class="klein">${liter(wasser)} von ${liter(wz)} Liter</span></div></div>
+    <div class="balken" style="margin:12px 0"><i style="width:${Math.min(100, wasser / wz * 100)}%"></i></div>
+    <div class="chips"><button class="chip" data-a="wasser" data-v="250">+ 250 ml</button><button class="chip" data-a="wasser" data-v="500">+ 500 ml</button><button class="chip" data-a="wasser" data-v="1000">+ 1 l</button><button class="chip" data-a="wasser" data-v="-250" ${wasser <= 0 ? 'disabled' : ''}>− 250 ml</button></div></section>`;
   h += viewAnalyse(t, s, z);
   h += viewMikro(t);
   h += `<section class="karte gewicht"><label for="kg">Gewicht an diesem Tag</label>
@@ -713,11 +735,11 @@ function viewHeute() {
 
 function tageBereich(n) { const ende = heute(); return Array.from({ length: n }, (_, i) => plusTage(ende, i - n + 1)); }
 function viewVerlauf() {
-  const keys = tageBereich(S.bereich), z = ziele();
+  const keys = tageBereich(S.bereich), z = ziele(heute(), 'basis');
   const mit = keys.map(k => ({ k, t: lies(k), s: summe(lies(k).eintraege) }));
   const erfasst = mit.filter(x => x.t.eintraege.length);
   const n = erfasst.length, avg = f => n ? erfasst.reduce((a, x) => a + x.s[f], 0) / n : 0;
-  const imZiel = z.kcal ? erfasst.filter(x => x.s.kcal <= z.kcal).length : null;
+  const imZiel = z.kcal ? erfasst.filter(x => x.s.kcal <= ziele(x.k).kcal).length : null;
   const gew = mit.filter(x => x.t.gewicht != null), delta = gew.length > 1 ? gew[gew.length - 1].t.gewicht - gew[0].t.gewicht : null;
   const kachel = (w, l) => `<div class="kachel"><b>${w}</b><span class="klein">${l}</span></div>`;
   let h = `<div class="chips" style="margin-top:14px">${[7, 30, 90].map(b => `<button class="chip ${S.bereich === b ? 'an' : ''}" data-a="bereich" data-v="${b}">${b} Tage</button>`).join('')}</div>`;
@@ -727,7 +749,7 @@ function viewVerlauf() {
     ${kachel(imZiel != null ? imZiel + ' / ' + n : n, imZiel != null ? 'Tage im Kalorienziel' : 'erfasste Tage')}
     ${kachel(delta != null ? (delta > 0 ? '+' : delta < 0 ? '−' : '') + zahl(Math.abs(delta), 1) + ' kg' : '–', 'Gewicht im Zeitraum')}</div>`;
   h += `<section class="karte"><h2>Kalorien je Tag</h2>
-    ${z.kcal ? `<div class="legende"><span><i style="background:var(--akzent)"></i>bis Ziel</span><span><i style="background:var(--warn)"></i>über Ziel</span><span>– – Ziel ${zahl(z.kcal)} kcal</span></div>` : ''}
+    ${z.kcal ? `<div class="legende"><span><i style="background:var(--akzent)"></i>bis Ziel</span><span><i style="background:var(--warn)"></i>über Ziel</span><span>– – ${D.profil.trainingPlus ? 'Ø-Ziel' : 'Ziel'} ${zahl(z.kcal)} kcal</span></div>` : ''}
     <div class="chart" id="cKcal"></div></section>`;
   const gTage = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
   const gStart = gTage.length ? D.tage[gTage[0]].gewicht : D.profil.gewicht, gAkt = gTage.length ? D.tage[gTage[gTage.length - 1]].gewicht : null;
@@ -753,7 +775,7 @@ function achseX(keys, x, H, unten) {
   return s;
 }
 function zeichneCharts() {
-  const keys = tageBereich(S.bereich), z = ziele();
+  const keys = tageBereich(S.bereich), z = ziele(heute(), 'basis');
   const leer = t => `<p class="klein">${t}</p>`;
   /* Kalorien: Balken */
   const elK = $('cKcal'), daten = keys.map(k => { const t = lies(k); return t.eintraege.length ? summe(t.eintraege) : null; });
@@ -768,13 +790,15 @@ function zeichneCharts() {
     for (let v = 0; v <= max; v += stufe) s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--linie)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${zahl(v)}</text>`;
     daten.forEach((d, i) => {
       if (!d || d.kcal <= 0) return;
+      const zt = ziele(keys[i]).kcal;
       const x0 = x(i) - bw / 2, yt = y(d.kcal), yb = y(0), r = Math.min(4, bw / 2, yb - yt);
-      s += `<path fill="${z.kcal && d.kcal > z.kcal ? 'var(--warn)' : 'var(--akzent)'}" d="M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x0 + bw - r}Q${x0 + bw} ${yt} ${x0 + bw} ${yt + r}V${yb}Z"/>`;
+      s += `<path fill="${zt && d.kcal > zt ? 'var(--warn)' : 'var(--akzent)'}" d="M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x0 + bw - r}Q${x0 + bw} ${yt} ${x0 + bw} ${yt + r}V${yb}Z"/>`;
     });
     if (z.kcal) s += `<line x1="${L}" x2="${W - R}" y1="${y(z.kcal)}" y2="${y(z.kcal)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
     s += achseX(keys, x, H, U);
     daten.forEach((d, i) => {
-      const tt = kurzDatum(keys[i]) + '\n' + (d ? `${zahl(Math.round(d.kcal))} kcal` + (z.kcal ? (d.kcal > z.kcal ? ` · ${zahl(Math.round(d.kcal - z.kcal))} über Ziel` : ` · ${zahl(Math.round(z.kcal - d.kcal))} unter Ziel`) : '') + `\nE ${zahl(Math.round(d.e))} · K ${zahl(Math.round(d.k))} · F ${zahl(Math.round(d.f))} g` : 'nichts erfasst');
+      const zt = ziele(keys[i]).kcal;
+      const tt = kurzDatum(keys[i]) + '\n' + (d ? `${zahl(Math.round(d.kcal))} kcal` + (zt ? (d.kcal > zt ? ` · ${zahl(Math.round(d.kcal - zt))} über Ziel` : ` · ${zahl(Math.round(zt - d.kcal))} unter Ziel`) : '') + `\nE ${zahl(Math.round(d.e))} · K ${zahl(Math.round(d.k))} · F ${zahl(Math.round(d.f))} g` : 'nichts erfasst');
       s += `<rect class="hit" x="${L + slot * i}" y="${O}" width="${slot}" height="${H - O - U}" data-tt="${esc(tt)}"/>`;
     });
     elK.innerHTML = `<svg viewBox="0 0 ${W} ${H}" height="${H}" role="img" aria-label="Kalorien je Tag">${s}</svg>`;
@@ -845,6 +869,10 @@ function viewZiele() {
     <p class="klein" style="margin-top:0">Sobald du auf der Seite „Heute" ein Gewicht einträgst, rechnet die App automatisch mit dem neuesten Wert.</p>
     <div class="feld"><span>Aktivität</span>${wahl('aktivitaet', AKTIV)}<div class="klein" style="margin-top:4px">${esc(aktHinweis)}</div></div>
     <div class="feld"><span>Vorhaben</span>${wahl('strategie', STRATEGIEN)}</div>
+    <div class="feld"><span>Deine Trainingstage</span><div class="chips">${[[1, 'Mo'], [2, 'Di'], [3, 'Mi'], [4, 'Do'], [5, 'Fr'], [6, 'Sa'], [0, 'So']].map(([n, t]) => `<button class="chip ${(p.trainingsTage || []).includes(n) ? 'an' : ''}" data-a="tplan" data-v="${n}">${t}</button>`).join('')}</div></div>
+    <div class="feld"><span>Mehr Kalorien an Trainingstagen</span>${wahl('trainingPlus', [[0, 'Aus'], [200, '+200 kcal'], [300, '+300 kcal'], [400, '+400 kcal'], [500, '+500 kcal']])}
+      <div class="klein" style="margin-top:4px">Ruhetage bekommen entsprechend weniger, sodass die Woche gleich bleibt. Der Unterschied geht in die Kohlenhydrate. Auf der Seite „Heute“ kannst du jeden Tag einzeln umschalten.</div></div>
+    <div class="feld"><span>Wasser pro Tag</span>${wahl('wasserZiel', [[2000, '2 l'], [2500, '2,5 l'], [3000, '3 l'], [3500, '3,5 l'], [4000, '4 l']])}</div>
     <label class="feld" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="manuell" style="width:auto" ${p.manuell ? 'checked' : ''}><span style="margin:0">Kalorienziel selbst festlegen</span></label>
     <label class="feld" id="manuellFeld" ${p.manuell ? '' : 'hidden'}><span>kcal pro Tag</span><input data-p="kcalManuell" inputmode="numeric" value="${wert(p.kcalManuell)}"></label>
   </section>
@@ -859,12 +887,17 @@ function viewZiele() {
   <p class="klein">Nährwerte der Grundliste sind Richtwerte. Der Bedarf ist eine Schätzung (Mifflin-St-Jeor × Aktivität): Bleibt das Gewicht über 2–3 Wochen anders als geplant, stell das Ziel nach.</p>`;
 }
 function zielAusgabe() {
-  const z = ziele(), p = D.profil;
+  const z = ziele(null, 'basis'), p = D.profil;
   if (!z.kcal) return '<p class="klein" style="margin:0">Noch unvollständig: Bitte Berechnung, Alter, Größe und Gewicht angeben.</p>';
   let h = `<div class="ergebnis"><div><b>${zahl(z.kcal)}</b><span class="klein">kcal</span></div>
     <div><b>${z.e != null ? zahl(z.e) + ' g' : '–'}</b><span class="klein">Eiweiß (2 g/kg)</span></div>
     <div><b>${z.k != null ? zahl(z.k) + ' g' : '–'}</b><span class="klein">Kohlenhydrate</span></div>
     <div><b>${z.f != null ? zahl(z.f) + ' g' : '–'}</b><span class="klein">Fett (0,8 g/kg)</span></div></div>`;
+  if (z.kcal && p.trainingPlus > 0) {
+    const tr = Math.round((z.kcal + p.trainingPlus) / 10) * 10, ru = Math.round((z.kcal - (z.ruheMinus || 0)) / 10) * 10;
+    h += `<div class="klein" style="margin-bottom:6px">Trainingstag <b>${zahl(tr)} kcal</b> · Ruhetag <b>${zahl(ru)} kcal</b> · oben der Wochenschnitt</div>`;
+    if (z.bmr && ru < z.bmr) h += `<div class="warn" style="margin-bottom:6px">Ein Ruhetag läge unter deinem Grundumsatz. Wähl weniger Plus oder weniger Trainingstage.</div>`;
+  }
   if (z.tdee) {
     h += `<div class="klein">Geschätzter Verbrauch: ${zahl(Math.round(z.tdee / 10) * 10)} kcal · Grundumsatz: ${zahl(Math.round(z.bmr / 10) * 10)} kcal</div>`;
     const defizit = z.tdee - z.kcal;
@@ -1172,6 +1205,9 @@ const AKTION = {
   tab(v) { if (v === 'heute') S.datum = heute(); S.tab = v; render(); scrollTo(0, 0); },
   gehe(v) { if (v <= heute()) { S.datum = v; render(); } },
   kalender() { const e = $('dp'); if (e.showPicker) e.showPicker(); else e.click(); },
+  trainTag(v) { tag(S.datum).training = v === '1'; sichern(); render(); },
+  tplan(v) { const n = Number(v), l = D.profil.trainingsTage || []; D.profil.trainingsTage = l.includes(n) ? l.filter(x => x !== n) : [...l, n]; sichern(); render(); },
+  wasser(v) { const t = tag(S.datum); t.wasser = Math.max(0, (t.wasser || 0) + Number(v)); sichern(); render(); },
   makroUm() { S.makroRest = !S.makroRest; render(); },
   analyse(v) { S.analyse = v; render(); },
   fab() {
