@@ -100,6 +100,14 @@ select.chip { -webkit-appearance: none; appearance: none; border: 0; width: auto
 .feld > span { display: block; font-size: 14px; font-weight: 600; margin-bottom: 4px; }
 .gitter { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0 12px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.zl { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%; padding: 12px 0; border-top: 1px solid var(--linie); text-align: left; font-size: 16px; }
+.zl b { color: var(--akzent); font-weight: 600; white-space: nowrap; }
+.tz-kopf { margin-top: 16px; padding-bottom: 2px; }
+.link { color: var(--akzent); font-weight: 600; padding: 14px 0 2px; border-top: 1px solid var(--linie); width: 100%; text-align: left; margin-top: 2px; }
+.mz-row { display: grid; grid-template-columns: 1fr 96px 96px; gap: 8px; align-items: center; padding: 5px 0; }
+.mz-row label { display: flex; align-items: center; gap: 4px; }
+.mz-row input { text-align: right; padding: 8px; }
+.mz-kopf { padding: 0; }
 .chips.tagart { margin-top: 12px; align-items: center; }
 .chips.zeile { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); }
 .chips.zeile::-webkit-scrollbar { display: none; }
@@ -538,41 +546,44 @@ function aktGewicht() {
   const ks = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
   return ks.length ? D.tage[ks[ks.length - 1]].gewicht : D.profil.gewicht;
 }
-const makroEigenAktiv = p => !!(p.makroEigen && p.mE > 0 && p.mK >= 0 && p.mK != null && p.mF > 0);
-/* Tagesziel für ein Datum. modus 'basis' = Wochendurchschnitt ohne Trainings-/Ruhetag-Ausgleich */
-function trainingAm(datum) {
-  const t = lies(datum).training;
-  return t != null ? t : (D.profil.trainingsTage || []).includes(alsDatum(datum).getDay());
+/* Makros als Prozent der Kalorien; Gramm = kcal × Prozent / 100 / (4 bzw. 9) */
+const KCAL_G = { k: 4, e: 4, f: 9 };
+const STD_PROZ = { k: 50, e: 30, f: 20 };
+const gramm = (kcal, proz, m) => kcal ? Math.round(kcal * proz / 100 / KCAL_G[m]) : null;
+const WOCHENTAGE = [[1, 'Mo'], [2, 'Di'], [3, 'Mi'], [4, 'Do'], [5, 'Fr'], [6, 'Sa'], [0, 'So']];
+const tageText = tage => WOCHENTAGE.filter(([n]) => tage.includes(n)).map(x => x[1]).join(', ');
+/* Aus den Körperdaten: Grundumsatz, Verbrauch, empfohlenes Kalorienziel */
+function berechnet() {
+  const p = D.profil, kg = aktGewicht();
+  if (!(p.geschlecht && p.alter && p.groesse && kg)) return { kg, bmr: null, tdee: null, kcal: null };
+  const bmr = 10 * kg + 6.25 * p.groesse - 5 * p.alter + (p.geschlecht === 'm' ? 5 : -161), tdee = bmr * p.aktivitaet;
+  return { kg, bmr, tdee, kcal: Math.round((tdee + p.strategie) / 10) * 10 };
 }
+const tagesZielFuer = datum => (D.profil.tagesziele || []).find(t => t.tage.includes(alsDatum(datum).getDay())) || null;
+/* Ziel für ein Datum; modus 'basis' = Standardziel ohne Tagesziele */
 function ziele(datum, modus) {
   datum = datum || S.datum;
-  const p = D.profil, kg = aktGewicht();
-  const komplett = p.geschlecht && p.alter && p.groesse && kg;
-  let bmr = null, tdee = null, kcal = null;
-  if (komplett) {
-    bmr = 10 * kg + 6.25 * p.groesse - 5 * p.alter + (p.geschlecht === 'm' ? 5 : -161);
-    tdee = bmr * p.aktivitaet;
-    kcal = Math.round((tdee + p.strategie) / 10) * 10;
+  const p = D.profil, b = berechnet();
+  let kcal = p.zielKcal || b.kcal, proz = p.zielProz || STD_PROZ, tz = null;
+  if (modus !== 'basis') { tz = tagesZielFuer(datum); if (tz) { kcal = tz.kcal; proz = tz.proz; } }
+  return { kcal, proz, tz, k: gramm(kcal, proz.k, 'k'), e: gramm(kcal, proz.e, 'e'), f: gramm(kcal, proz.f, 'f'), bmr: b.bmr, tdee: b.tdee, kg: b.kg, empfohlen: b.kcal };
+}
+/* Alte Einstellungen (eigene Gramm, eigenes kcal-Ziel, Trainingstage mit Plus) einmalig übernehmen */
+function zieleUebernehmen() {
+  const p = D.profil;
+  if (p.zieleV2) return;
+  const r = v => Math.round(v * 100) / 100;
+  if (p.makroEigen && p.mE > 0 && p.mF > 0 && p.mK != null) {
+    const kc = 4 * p.mE + 4 * p.mK + 9 * p.mF;
+    p.zielKcal = Math.round(kc);
+    p.zielProz = { k: r(4 * p.mK / kc * 100), e: r(4 * p.mE / kc * 100), f: r(9 * p.mF / kc * 100) };
+  } else if (p.manuell && p.kcalManuell) p.zielKcal = p.kcalManuell;
+  if (p.trainingPlus > 0 && (p.trainingsTage || []).length) {
+    const basis = p.zielKcal || berechnet().kcal;
+    if (basis) p.tagesziele = [{ tage: [...p.trainingsTage], kcal: Math.round((basis + p.trainingPlus) / 10) * 10, proz: { ...(p.zielProz || STD_PROZ) } }];
   }
-  if (p.manuell && p.kcalManuell) kcal = p.kcalManuell;
-  const eigen = makroEigenAktiv(p);
-  if (eigen) kcal = Math.round(4 * p.mE + 4 * p.mK + 9 * p.mF);
-  const basis = kcal, plus = p.trainingPlus || 0, n = (p.trainingsTage || []).length;
-  const ruheMinus = n > 0 && n < 7 ? plus * n / (7 - n) : 0;
-  let training = null;
-  if (kcal && plus > 0 && modus !== 'basis') {
-    training = trainingAm(datum);
-    kcal = Math.round((kcal + (training ? plus : -ruheMinus)) / 10) * 10;
-  }
-  let e = null, f = null, k = null;
-  if (eigen) {
-    /* Trainings-/Ruhetag-Unterschied geht in die Kohlenhydrate */
-    e = p.mE; f = p.mF; k = Math.max(0, Math.round(p.mK + (kcal - basis) / 4));
-  } else if (kg && kcal) {
-    e = Math.round(kg * 2); f = Math.round(kg * 0.8);
-    k = Math.max(0, Math.round((kcal - 4 * e - 9 * f) / 4));
-  }
-  return { kcal, basis, training, plus, ruheMinus, e, k, f, bmr, tdee, kg };
+  p.zieleV2 = true;
+  sichern();
 }
 
 /* ---------- Oberfläche ---------- */
@@ -697,8 +708,7 @@ function viewHeute() {
   const t = lies(S.datum), s = summe(t.eintraege), z = ziele(), vortagK = plusTage(S.datum, -1), vortag = lies(vortagK);
   const vortagName = alsDatum(vortagK).toLocaleDateString('de-DE', { weekday: 'long' });
   let h = wochenLeiste(z);
-  if (z.kcal && z.plus > 0) h += `<div class="chips tagart"><button class="chip ${z.training ? 'an' : ''}" data-a="trainTag" data-v="1">Trainingstag</button><button class="chip ${z.training ? '' : 'an'}" data-a="trainTag" data-v="0">Ruhetag</button>
-    <span class="klein">${z.training ? '+' + zahl(z.plus) + ' kcal, mehr Kohlenhydrate' : '−' + zahl(Math.round(z.ruheMinus / 10) * 10) + ' kcal, weniger Kohlenhydrate'}</span></div>`;
+  if (z.tz) h += `<div class="klein" style="margin-top:10px">Heute gilt dein Tagesziel für ${tageText(z.tz.tage)}: ${zahl(z.kcal)} kcal</div>`;
   if (!z.kcal) h += `<div class="hinweis"><span>Trag einmal deine Daten ein, dann rechnet die App dein Tagesziel aus.</span><button class="knopf" data-a="tab" data-v="ziele">Ziele</button></div>`;
   const rest = z.kcal ? Math.round(z.kcal - s.kcal) : null;
   h += `<section class="karte"><div class="kcal-wrap">
@@ -756,7 +766,7 @@ function viewVerlauf() {
     ${kachel(imZiel != null ? imZiel + ' / ' + n : n, imZiel != null ? 'Tage im Kalorienziel' : 'erfasste Tage')}
     ${kachel(delta != null ? (delta > 0 ? '+' : delta < 0 ? '−' : '') + zahl(Math.abs(delta), 1) + ' kg' : '–', 'Gewicht im Zeitraum')}</div>`;
   h += `<section class="karte"><h2>Kalorien je Tag</h2>
-    ${z.kcal ? `<div class="legende"><span><i style="background:var(--akzent)"></i>bis Ziel</span><span><i style="background:var(--warn)"></i>über Ziel</span><span>– – ${D.profil.trainingPlus ? 'Ø-Ziel' : 'Ziel'} ${zahl(z.kcal)} kcal</span></div>` : ''}
+    ${z.kcal ? `<div class="legende"><span><i style="background:var(--akzent)"></i>bis Ziel</span><span><i style="background:var(--warn)"></i>über Ziel</span><span>– – ${(D.profil.tagesziele || []).length ? 'Standardziel' : 'Ziel'} ${zahl(z.kcal)} kcal</span></div>` : ''}
     <div class="chart" id="cKcal"></div></section>`;
   const gTage = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
   const gStart = gTage.length ? D.tage[gTage[0]].gewicht : D.profil.gewicht, gAkt = gTage.length ? D.tage[gTage[gTage.length - 1]].gewicht : null;
@@ -864,7 +874,17 @@ function viewZiele() {
   const p = D.profil, wert = v => v == null ? '' : zahl(v, 1);
   const wahl = (k, liste) => `<div class="chips">${liste.map(([v, t, u]) => `<button class="chip ${String(p[k]) === String(v) ? 'an' : ''}" data-a="pset" data-k="${k}" data-v="${v}" ${u ? `title="${esc(u)}"` : ''}>${t}${k === 'strategie' ? ` <span style="opacity:.8">${u}</span>` : ''}</button>`).join('')}</div>`;
   const aktHinweis = (AKTIV.find(a => a[0] === p.aktivitaet) || [])[2] || '';
-  return `<section class="karte"><h2>Dein Tagesziel</h2><div id="zielAus">${zielAusgabe()}</div></section>
+  const z = ziele(null, 'basis'), b = berechnet();
+  const zeilen = (kcal, proz, aktion, v, hinweis) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>Kalorien${hinweis ? ` <span class="klein">${hinweis}</span>` : ''}</span><b>${kcal ? zahl(kcal) : '–'}</b></button>`
+    + [['k', 'Kohlenhydrate'], ['e', 'Eiweiß'], ['f', 'Fette']].map(([m, n]) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>${n} <span class="klein">${kcal ? zahl(gramm(kcal, proz[m], m)) + ' g' : ''}</span></span><b>${zahl(proz[m], 1)} %</b></button>`).join('');
+  const tz = p.tagesziele || [];
+  return `<section class="karte"><h2>Standardziel</h2>
+    ${zeilen(z.kcal, z.proz, 'zielStd', '', p.zielKcal ? 'selbst festgelegt' : (b.kcal ? 'aus deinen Daten berechnet' : ''))}
+    <div id="zielAus" class="klein" style="margin-top:10px">${zielAusgabe()}</div></section>
+  <section class="karte"><h2>Tagesziele setzen</h2>
+    <p class="klein" style="margin:0 0 4px">Eigene Ziele für bestimmte Wochentage, zum Beispiel für deine Trainingstage. An allen anderen Tagen gilt das Standardziel.</p>
+    ${tz.map((t, i) => `<div class="tz-kopf"><b>${tageText(t.tage)}</b></div>${zeilen(t.kcal, t.proz, 'tzEdit', i)}`).join('')}
+    <button class="link" data-a="tzNeu">+ Tagesziel hinzufügen</button></section>
   <section class="karte"><h2>Deine Daten</h2>
     <div class="feld"><span>Berechnung nach</span>${wahl('geschlecht', [['m', 'männlich'], ['w', 'weiblich']])}</div>
     <div class="gitter">
@@ -876,21 +896,7 @@ function viewZiele() {
     <p class="klein" style="margin-top:0">Sobald du auf der Seite „Heute" ein Gewicht einträgst, rechnet die App automatisch mit dem neuesten Wert.</p>
     <div class="feld"><span>Aktivität</span>${wahl('aktivitaet', AKTIV)}<div class="klein" style="margin-top:4px">${esc(aktHinweis)}</div></div>
     <div class="feld"><span>Vorhaben</span>${wahl('strategie', STRATEGIEN)}</div>
-    <div class="feld"><span>Deine Trainingstage</span><div class="chips">${[[1, 'Mo'], [2, 'Di'], [3, 'Mi'], [4, 'Do'], [5, 'Fr'], [6, 'Sa'], [0, 'So']].map(([n, t]) => `<button class="chip ${(p.trainingsTage || []).includes(n) ? 'an' : ''}" data-a="tplan" data-v="${n}">${t}</button>`).join('')}</div></div>
-    <div class="feld"><span>Mehr Kalorien an Trainingstagen</span>${wahl('trainingPlus', [[0, 'Aus'], [200, '+200 kcal'], [300, '+300 kcal'], [400, '+400 kcal'], [500, '+500 kcal']])}
-      <div class="klein" style="margin-top:4px">Ruhetage bekommen entsprechend weniger, sodass die Woche gleich bleibt. Der Unterschied geht in die Kohlenhydrate. Auf der Seite „Heute“ kannst du jeden Tag einzeln umschalten.</div></div>
     <div class="feld"><span>Wasser pro Tag</span>${wahl('wasserZiel', [[2000, '2 l'], [2500, '2,5 l'], [3000, '3 l'], [3500, '3,5 l'], [4000, '4 l']])}</div>
-    <label class="feld" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="makroEigen" style="width:auto" ${p.makroEigen ? 'checked' : ''}><span style="margin:0">Makros selbst festlegen (in Gramm)</span></label>
-    <div id="makroFelder" ${p.makroEigen ? '' : 'hidden'}>
-      <div class="gitter">
-        <label class="feld"><span>Eiweiß (g)</span><input data-p="mE" inputmode="numeric" value="${wert(p.mE)}"></label>
-        <label class="feld"><span>Kohlenhydrate (g)</span><input data-p="mK" inputmode="numeric" value="${wert(p.mK)}"></label>
-        <label class="feld"><span>Fett (g)</span><input data-p="mF" inputmode="numeric" value="${wert(p.mF)}"></label>
-      </div>
-      <p class="klein" style="margin-top:0">Das Kalorienziel ergibt sich daraus: Eiweiß und Kohlenhydrate 4 kcal je Gramm, Fett 9 kcal je Gramm. Es ersetzt das berechnete Ziel.</p>
-    </div>
-    <label class="feld" style="display:flex;gap:8px;align-items:center;margin-bottom:8px" ${p.makroEigen ? 'hidden' : ''} id="manuellZeile"><input type="checkbox" id="manuell" style="width:auto" ${p.manuell ? 'checked' : ''}><span style="margin:0">Kalorienziel selbst festlegen</span></label>
-    <label class="feld" id="manuellFeld" ${p.manuell && !p.makroEigen ? '' : 'hidden'}><span>kcal pro Tag</span><input data-p="kcalManuell" inputmode="numeric" value="${wert(p.kcalManuell)}"></label>
   </section>
   <section class="karte"><h2>Mahlzeiten-Zeiten</h2>
     <p class="klein" style="margin-top:0">Steht im Tagebuch dabei, und der Plus-Knopf unten schlägt dir die Mahlzeit vor, deren Zeit am nächsten liegt.</p>
@@ -904,28 +910,23 @@ function viewZiele() {
 }
 function zielAusgabe() {
   const z = ziele(null, 'basis'), p = D.profil;
-  if (!z.kcal) return p.makroEigen ? '<p class="klein" style="margin:0">Bitte Eiweiß, Kohlenhydrate und Fett in Gramm eintragen.</p>' : '<p class="klein" style="margin:0">Noch unvollständig: Bitte Berechnung, Alter, Größe und Gewicht angeben.</p>';
-  let h = `<div class="ergebnis"><div><b>${zahl(z.kcal)}</b><span class="klein">kcal</span></div>
-    <div><b>${z.e != null ? zahl(z.e) + ' g' : '–'}</b><span class="klein">Eiweiß ${makroEigenAktiv(p) ? '(eigen)' : '(2 g/kg)'}</span></div>
-    <div><b>${z.k != null ? zahl(z.k) + ' g' : '–'}</b><span class="klein">Kohlenhydrate</span></div>
-    <div><b>${z.f != null ? zahl(z.f) + ' g' : '–'}</b><span class="klein">Fett ${makroEigenAktiv(p) ? '(eigen)' : '(0,8 g/kg)'}</span></div></div>`;
-  if (z.kcal && p.trainingPlus > 0) {
-    const tr = Math.round((z.kcal + p.trainingPlus) / 10) * 10, ru = Math.round((z.kcal - (z.ruheMinus || 0)) / 10) * 10;
-    h += `<div class="klein" style="margin-bottom:6px">Trainingstag <b>${zahl(tr)} kcal</b> · Ruhetag <b>${zahl(ru)} kcal</b> · oben der Wochenschnitt</div>`;
-    if (z.bmr && ru < z.bmr) h += `<div class="warn" style="margin-bottom:6px">Ein Ruhetag läge unter deinem Grundumsatz. Wähl weniger Plus oder weniger Trainingstage.</div>`;
-  }
+  if (!z.kcal) return 'Trag unten deine Daten ein, dann rechnet die App ein Ziel aus. Oder tipp auf „Kalorien“ und leg es selbst fest.';
+  const zeilen = [];
+  if (z.tdee) zeilen.push(`Geschätzter Verbrauch ${zahl(Math.round(z.tdee / 10) * 10)} kcal · Grundumsatz ${zahl(Math.round(z.bmr / 10) * 10)} kcal${p.zielKcal && z.empfohlen ? ` · berechnet wären ${zahl(z.empfohlen)} kcal` : ''}`);
   if (z.tdee) {
-    h += `<div class="klein">Geschätzter Verbrauch: ${zahl(Math.round(z.tdee / 10) * 10)} kcal · Grundumsatz: ${zahl(Math.round(z.bmr / 10) * 10)} kcal</div>`;
-    const defizit = z.tdee - z.kcal;
+    const schnitt = WOCHENTAGE.reduce((a, [n]) => { const t = (p.tagesziele || []).find(x => x.tage.includes(n)); return a + (t ? t.kcal : z.kcal); }, 0) / 7;
+    const defizit = z.tdee - schnitt;
+    if ((p.tagesziele || []).length) zeilen.push(`Wochenschnitt mit Tageszielen: ${zahl(Math.round(schnitt / 10) * 10)} kcal`);
     if (z.kg && p.zielgewicht && z.kg > p.zielgewicht && defizit > 0) {
       const d = new Date(); d.setDate(d.getDate() + Math.round((z.kg - p.zielgewicht) * 7700 / defizit));
-      h += `<div class="klein" style="margin-top:4px">Rechnerisch ${zahl(p.zielgewicht, 1)} kg etwa im ${d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}.</div>`;
-      if (defizit * 7 / 7700 > z.kg * 0.01) h += `<div class="warn" style="margin-top:6px">Das wäre mehr als 1 % Körpergewicht pro Woche – dabei geht leicht Muskelmasse verloren.</div>`;
+      zeilen.push(`Rechnerisch ${zahl(p.zielgewicht, 1)} kg etwa im ${d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}.`);
+      if (defizit * 7 / 7700 > z.kg * 0.01) zeilen.push('<span class="warn">Das wäre mehr als 1 % Körpergewicht pro Woche, dabei geht leicht Muskelmasse verloren.</span>');
     }
-    if (z.kcal < z.bmr) h += `<div class="warn" style="margin-top:6px">Das Ziel liegt unter deinem Grundumsatz. Das ist auf Dauer zu wenig.</div>`;
+    if (schnitt < z.bmr) zeilen.push('<span class="warn">Im Schnitt liegst du unter deinem Grundumsatz. Das ist auf Dauer zu wenig.</span>');
   }
-  return h;
+  return zeilen.map(t => `<div style="margin-top:3px">${t}</div>`).join('');
 }
+
 
 /* ---------- Auswahl-Dialog ---------- */
 const dlg = $('dlg');
@@ -1200,6 +1201,52 @@ function eanForm(code, v, text, gespeichert) {
     <p class="warn" id="fEanFehler" hidden></p>
     <button class="knopf" style="width:100%">Speichern und Menge eingeben</button></form>`;
 }
+function oeffneZiel(wo) {
+  const p = D.profil, std = ziele(null, 'basis');
+  if (wo === 'std') P = { zd: { wo, kcal: std.kcal, proz: { ...std.proz }, tage: [] } };
+  else if (wo === 'neu') P = { zd: { wo, kcal: std.kcal, proz: { ...std.proz }, tage: [] } };
+  else { const t = p.tagesziele[wo]; P = { zd: { wo, kcal: t.kcal, proz: { ...t.proz }, tage: [...t.tage] } }; }
+  zeichneZielDlg(); if (!dlg.open) dlg.showModal();
+}
+function zeichneZielDlg() {
+  const d = P.zd, istTz = d.wo !== 'std', b = berechnet();
+  const belegt = (D.profil.tagesziele || []).filter((t, i) => i !== d.wo).flatMap(t => t.tage);
+  dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf"><h2>${istTz ? (d.wo === 'neu' ? 'Tagesziel hinzufügen' : 'Tagesziel bearbeiten') : 'Standardziel'}</h2><button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
+    <div class="liste" style="min-height:0">
+      ${istTz ? `<div class="feld"><span>Wochentage</span><div class="chips">${WOCHENTAGE.map(([n, t]) => `<button class="chip ${d.tage.includes(n) ? 'an' : ''}" data-a="zdTag" data-v="${n}" ${belegt.includes(n) ? 'disabled title="hat schon ein Tagesziel"' : ''}>${t}</button>`).join('')}</div></div>` : ''}
+      <label class="feld"><span>Kalorien pro Tag</span><input id="zdKcal" inputmode="numeric" value="${d.kcal ? Math.round(d.kcal) : ''}"></label>
+      ${!istTz && b.kcal ? `<button class="knopf2" data-a="zdBerechnet" style="margin-bottom:12px">Berechneten Wert nehmen: ${zahl(b.kcal)} kcal</button>` : ''}
+      <div class="mz-row mz-kopf"><span class="klein">Makro</span><span class="klein">Prozent</span><span class="klein">Gramm</span></div>
+      ${[['k', 'Kohlenhydrate'], ['e', 'Eiweiß'], ['f', 'Fette']].map(([m, n]) => `<div class="mz-row"><span>${n}</span>
+        <label><input id="mp_${m}" inputmode="decimal" value="${zahl(d.proz[m], 1)}" aria-label="${n} in Prozent"><span class="klein">%</span></label>
+        <label><input id="mg_${m}" inputmode="numeric" value="${d.kcal ? gramm(d.kcal, d.proz[m], m) : ''}" aria-label="${n} in Gramm"><span class="klein">g</span></label></div>`).join('')}
+      <div class="klein" id="zdSumme" style="margin-top:8px"></div>
+      <p class="warn" id="zdFehler" style="margin:8px 0 0" hidden></p>
+    </div>
+    <div style="display:flex;gap:8px">${istTz && d.wo !== 'neu' ? '<button class="knopf2" data-a="zdLoeschen">Löschen</button>' : ''}<button class="knopf" data-a="zdSpeichern" style="flex:1">Speichern</button></div></div>`;
+  zdSumme();
+}
+function zdSumme() {
+  const p = P.zd.proz, s = p.k + p.e + p.f, ok = Math.abs(s - 100) <= 0.5;
+  const el = $('zdSumme'); el.textContent = `Zusammen ${zahl(s, 1)} %${ok ? '' : ' – es müssen 100 % sein'}`; el.className = ok ? 'klein' : 'warn';
+}
+function zdGrammNeu() { for (const m of ['k', 'e', 'f']) { const el = $('mg_' + m); if (el && document.activeElement !== el) el.value = P.zd.kcal ? gramm(P.zd.kcal, P.zd.proz[m], m) : ''; } }
+function zdSpeichern() {
+  const d = P.zd, p = D.profil, fe = $('zdFehler'), zeige = t => { fe.textContent = t; fe.hidden = false; };
+  if (d.wo !== 'std' && !d.tage.length) return zeige('Bitte mindestens einen Wochentag antippen.');
+  if (!(d.kcal >= 800 && d.kcal <= 8000)) return zeige('Bitte Kalorien zwischen 800 und 8.000 eintragen.');
+  if (Math.abs(d.proz.k + d.proz.e + d.proz.f - 100) > 0.5) return zeige('Die drei Prozentwerte müssen zusammen 100 % ergeben.');
+  const r = v => Math.round(v * 100) / 100, proz = { k: r(d.proz.k), e: r(d.proz.e), f: r(d.proz.f) };
+  if (d.wo === 'std') {
+    if (d.kcalGeaendert) p.zielKcal = Math.round(d.kcal); else if (d.berechnet) p.zielKcal = null;
+    p.zielProz = proz;
+  } else {
+    const neu = { tage: [...d.tage].sort((a, b) => (a || 7) - (b || 7)), kcal: Math.round(d.kcal), proz };
+    p.tagesziele = p.tagesziele || [];
+    if (d.wo === 'neu') p.tagesziele.push(neu); else p.tagesziele[d.wo] = neu;
+  }
+  sichern(); dlg.close(); render(); toast('✓ Ziel gespeichert');
+}
 function zeichneSchnell() {
   dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf"><button class="knopf2" data-a="zurueck">‹ Zurück</button><button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
     <h2>Nur Kalorien eintragen</h2>
@@ -1221,6 +1268,13 @@ const AKTION = {
   tab(v) { if (v === 'heute') S.datum = heute(); S.tab = v; render(); scrollTo(0, 0); },
   gehe(v) { if (v <= heute()) { S.datum = v; render(); } },
   kalender() { const e = $('dp'); if (e.showPicker) e.showPicker(); else e.click(); },
+  zielStd() { oeffneZiel('std'); },
+  tzNeu() { oeffneZiel('neu'); },
+  tzEdit(v) { oeffneZiel(Number(v)); },
+  zdTag(v) { const n = Number(v), t = P.zd.tage; P.zd.tage = t.includes(n) ? t.filter(x => x !== n) : [...t, n]; zeichneZielDlg(); },
+  zdBerechnet() { P.zd.kcal = berechnet().kcal; P.zd.kcalGeaendert = false; P.zd.berechnet = true; $('zdKcal').value = Math.round(P.zd.kcal); zdGrammNeu(); },
+  zdSpeichern,
+  zdLoeschen() { D.profil.tagesziele.splice(P.zd.wo, 1); sichern(); dlg.close(); render(); toast('Tagesziel gelöscht'); },
   trainTag(v) { tag(S.datum).training = v === '1'; sichern(); render(); },
   tplan(v) { const n = Number(v), l = D.profil.trainingsTage || []; D.profil.trainingsTage = l.includes(n) ? l.filter(x => x !== n) : [...l, n]; sichern(); render(); },
   wasser(v) { const t = tag(S.datum); t.wasser = Math.max(0, (t.wasser || 0) + Number(v)); sichern(); render(); },
@@ -1327,6 +1381,9 @@ document.addEventListener('input', ev => {
   const t = ev.target;
   if (t.id === 'such') { P.suche = t.value; dlg.querySelectorAll('[data-a="kat"]').forEach(c => c.classList.toggle('an', !P.suche && c.dataset.v === P.kat)); zeichneListe(); }
   else if (t.id === 'menge') { P.g = num(t.value); zeigeVorschau(); }
+  else if (t.id === 'zdKcal') { P.zd.kcal = num(t.value); P.zd.kcalGeaendert = true; zdGrammNeu(); }
+  else if (/^mp_[kef]$/.test(t.id)) { const m = t.id.slice(3); P.zd.proz[m] = num(t.value) || 0; zdGrammNeu(); zdSumme(); }
+  else if (/^mg_[kef]$/.test(t.id)) { const m = t.id.slice(3), g = num(t.value) || 0; if (P.zd.kcal) { P.zd.proz[m] = g * KCAL_G[m] / P.zd.kcal * 100; $('mp_' + m).value = zahl(P.zd.proz[m], 1); } zdSumme(); }
   else if (t.id === 'portionen') { const g = num(t.value), ges = rezG(P.rez); P.faktor = g > 0 && ges > 0 ? g / ges : null; zeigeRezVorschau(); }
   else if (t.id === 'bauName') { P.bau.name = t.value; }
   else if (t.dataset.bt) { P.bau.teile[Number(t.dataset.bt)].g = num(t.value) || 0; zeigeBauSumme(); }
@@ -1347,6 +1404,7 @@ document.addEventListener('change', ev => {
   else if (t.id === 'manuell') { D.profil.manuell = t.checked; sichern(); $('manuellFeld').hidden = !t.checked; $('zielAus').innerHTML = zielAusgabe(); }
   else if (t.dataset.z) { D.zeiten[t.dataset.z] = t.value; sichern(); }
   else if (t.id === 'anaMikro') { if (t.value) { S.analyse = t.value; render(); } }
+  else if (t.dataset && t.dataset.p) { render(); }
   else if (t.id === 'pMz') { P.m = t.value; zeichneListe(); }
 });
 document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.id === 'eanFeld') eanSuche(ev.target.value); else if (ev.key === 'Enter' && ev.target.id === 'menge') eintragen(); else if (ev.key === 'Enter' && ev.target.id === 'portionen') rezEintragen(); });
@@ -1436,6 +1494,7 @@ function vorlagenEinspielen() {
   if (neu) sichern();
 }
 vorlagenEinspielen();
+zieleUebernehmen();
 render();
 </script>
 </body>
