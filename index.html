@@ -25,6 +25,7 @@ try { var t = localStorage.getItem('kalorien-thema'); if (t) document.documentEl
   --pille: #dfeafa; --pille-ink: #1a5fb8; --nav: #ffffff;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg) linear-gradient(var(--bg2), var(--bg) 340px) no-repeat; color: var(--ink); font: 16px/1.45 system-ui, "Segoe UI", Roboto, sans-serif; }
 button, input, select { font: inherit; color: var(--ink); }
 button { cursor: pointer; background: none; border: 0; padding: 0; }
@@ -457,7 +458,7 @@ const KEY = 'kalorien-tracker';
 function neu() {
   return {
     version: 1,
-    profil: { geschlecht: null, alter: null, groesse: null, gewicht: null, zielgewicht: null, aktivitaet: 1.75, strategie: -500, manuell: false, kcalManuell: null, trainingsTage: [], trainingPlus: 0, wasserZiel: 3000 },
+    profil: { geschlecht: null, alter: null, groesse: null, gewicht: null, zielgewicht: null, aktivitaet: 1.75, strategie: -500, manuell: false, kcalManuell: null, trainingsTage: [], trainingPlus: 0, wasserZiel: 3000, makroEigen: false, mE: null, mK: null, mF: null },
     zeiten: { fruehstueck: '06:30', mittag: '12:00', abend: '18:30', snack: '15:30' },
     tage: {}, eigene: [], rezepte: [], favoriten: [], zuletzt: [], mengen: {}
   };
@@ -537,6 +538,7 @@ function aktGewicht() {
   const ks = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
   return ks.length ? D.tage[ks[ks.length - 1]].gewicht : D.profil.gewicht;
 }
+const makroEigenAktiv = p => !!(p.makroEigen && p.mE > 0 && p.mK >= 0 && p.mK != null && p.mF > 0);
 /* Tagesziel für ein Datum. modus 'basis' = Wochendurchschnitt ohne Trainings-/Ruhetag-Ausgleich */
 function trainingAm(datum) {
   const t = lies(datum).training;
@@ -553,6 +555,8 @@ function ziele(datum, modus) {
     kcal = Math.round((tdee + p.strategie) / 10) * 10;
   }
   if (p.manuell && p.kcalManuell) kcal = p.kcalManuell;
+  const eigen = makroEigenAktiv(p);
+  if (eigen) kcal = Math.round(4 * p.mE + 4 * p.mK + 9 * p.mF);
   const basis = kcal, plus = p.trainingPlus || 0, n = (p.trainingsTage || []).length;
   const ruheMinus = n > 0 && n < 7 ? plus * n / (7 - n) : 0;
   let training = null;
@@ -561,7 +565,10 @@ function ziele(datum, modus) {
     kcal = Math.round((kcal + (training ? plus : -ruheMinus)) / 10) * 10;
   }
   let e = null, f = null, k = null;
-  if (kg && kcal) {
+  if (eigen) {
+    /* Trainings-/Ruhetag-Unterschied geht in die Kohlenhydrate */
+    e = p.mE; f = p.mF; k = Math.max(0, Math.round(p.mK + (kcal - basis) / 4));
+  } else if (kg && kcal) {
     e = Math.round(kg * 2); f = Math.round(kg * 0.8);
     k = Math.max(0, Math.round((kcal - 4 * e - 9 * f) / 4));
   }
@@ -873,8 +880,17 @@ function viewZiele() {
     <div class="feld"><span>Mehr Kalorien an Trainingstagen</span>${wahl('trainingPlus', [[0, 'Aus'], [200, '+200 kcal'], [300, '+300 kcal'], [400, '+400 kcal'], [500, '+500 kcal']])}
       <div class="klein" style="margin-top:4px">Ruhetage bekommen entsprechend weniger, sodass die Woche gleich bleibt. Der Unterschied geht in die Kohlenhydrate. Auf der Seite „Heute“ kannst du jeden Tag einzeln umschalten.</div></div>
     <div class="feld"><span>Wasser pro Tag</span>${wahl('wasserZiel', [[2000, '2 l'], [2500, '2,5 l'], [3000, '3 l'], [3500, '3,5 l'], [4000, '4 l']])}</div>
-    <label class="feld" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="manuell" style="width:auto" ${p.manuell ? 'checked' : ''}><span style="margin:0">Kalorienziel selbst festlegen</span></label>
-    <label class="feld" id="manuellFeld" ${p.manuell ? '' : 'hidden'}><span>kcal pro Tag</span><input data-p="kcalManuell" inputmode="numeric" value="${wert(p.kcalManuell)}"></label>
+    <label class="feld" style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><input type="checkbox" id="makroEigen" style="width:auto" ${p.makroEigen ? 'checked' : ''}><span style="margin:0">Makros selbst festlegen (in Gramm)</span></label>
+    <div id="makroFelder" ${p.makroEigen ? '' : 'hidden'}>
+      <div class="gitter">
+        <label class="feld"><span>Eiweiß (g)</span><input data-p="mE" inputmode="numeric" value="${wert(p.mE)}"></label>
+        <label class="feld"><span>Kohlenhydrate (g)</span><input data-p="mK" inputmode="numeric" value="${wert(p.mK)}"></label>
+        <label class="feld"><span>Fett (g)</span><input data-p="mF" inputmode="numeric" value="${wert(p.mF)}"></label>
+      </div>
+      <p class="klein" style="margin-top:0">Das Kalorienziel ergibt sich daraus: Eiweiß und Kohlenhydrate 4 kcal je Gramm, Fett 9 kcal je Gramm. Es ersetzt das berechnete Ziel.</p>
+    </div>
+    <label class="feld" style="display:flex;gap:8px;align-items:center;margin-bottom:8px" ${p.makroEigen ? 'hidden' : ''} id="manuellZeile"><input type="checkbox" id="manuell" style="width:auto" ${p.manuell ? 'checked' : ''}><span style="margin:0">Kalorienziel selbst festlegen</span></label>
+    <label class="feld" id="manuellFeld" ${p.manuell && !p.makroEigen ? '' : 'hidden'}><span>kcal pro Tag</span><input data-p="kcalManuell" inputmode="numeric" value="${wert(p.kcalManuell)}"></label>
   </section>
   <section class="karte"><h2>Mahlzeiten-Zeiten</h2>
     <p class="klein" style="margin-top:0">Steht im Tagebuch dabei, und der Plus-Knopf unten schlägt dir die Mahlzeit vor, deren Zeit am nächsten liegt.</p>
@@ -888,11 +904,11 @@ function viewZiele() {
 }
 function zielAusgabe() {
   const z = ziele(null, 'basis'), p = D.profil;
-  if (!z.kcal) return '<p class="klein" style="margin:0">Noch unvollständig: Bitte Berechnung, Alter, Größe und Gewicht angeben.</p>';
+  if (!z.kcal) return p.makroEigen ? '<p class="klein" style="margin:0">Bitte Eiweiß, Kohlenhydrate und Fett in Gramm eintragen.</p>' : '<p class="klein" style="margin:0">Noch unvollständig: Bitte Berechnung, Alter, Größe und Gewicht angeben.</p>';
   let h = `<div class="ergebnis"><div><b>${zahl(z.kcal)}</b><span class="klein">kcal</span></div>
-    <div><b>${z.e != null ? zahl(z.e) + ' g' : '–'}</b><span class="klein">Eiweiß (2 g/kg)</span></div>
+    <div><b>${z.e != null ? zahl(z.e) + ' g' : '–'}</b><span class="klein">Eiweiß ${makroEigenAktiv(p) ? '(eigen)' : '(2 g/kg)'}</span></div>
     <div><b>${z.k != null ? zahl(z.k) + ' g' : '–'}</b><span class="klein">Kohlenhydrate</span></div>
-    <div><b>${z.f != null ? zahl(z.f) + ' g' : '–'}</b><span class="klein">Fett (0,8 g/kg)</span></div></div>`;
+    <div><b>${z.f != null ? zahl(z.f) + ' g' : '–'}</b><span class="klein">Fett ${makroEigenAktiv(p) ? '(eigen)' : '(0,8 g/kg)'}</span></div></div>`;
   if (z.kcal && p.trainingPlus > 0) {
     const tr = Math.round((z.kcal + p.trainingPlus) / 10) * 10, ru = Math.round((z.kcal - (z.ruheMinus || 0)) / 10) * 10;
     h += `<div class="klein" style="margin-bottom:6px">Trainingstag <b>${zahl(tr)} kcal</b> · Ruhetag <b>${zahl(ru)} kcal</b> · oben der Wochenschnitt</div>`;
@@ -1321,6 +1337,13 @@ document.addEventListener('change', ev => {
   const t = ev.target;
   if (t.id === 'dp') { if (t.value && t.value <= heute()) { S.datum = t.value; render(); } }
   else if (t.id === 'kg') { tag(S.datum).gewicht = num(t.value); sichern(); render(); }
+  else if (t.id === 'makroEigen') {
+    if (t.checked && D.profil.mE == null && D.profil.mK == null && D.profil.mF == null) {
+      const z = ziele(null, 'basis');
+      if (z.e != null) { D.profil.mE = z.e; D.profil.mK = z.k; D.profil.mF = z.f; }
+    }
+    D.profil.makroEigen = t.checked; sichern(); render();
+  }
   else if (t.id === 'manuell') { D.profil.manuell = t.checked; sichern(); $('manuellFeld').hidden = !t.checked; $('zielAus').innerHTML = zielAusgabe(); }
   else if (t.dataset.z) { D.zeiten[t.dataset.z] = t.value; sichern(); }
   else if (t.id === 'anaMikro') { if (t.value) { S.analyse = t.value; render(); } }
