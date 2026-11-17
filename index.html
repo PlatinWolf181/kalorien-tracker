@@ -748,7 +748,7 @@ const punkt = m => `<i class="punkt" style="background:${FARBE[m]}"></i>`;
 function ringSvg(g, dicke, anteil, drueber, innen, farbe) {
   const r = (g - dicke) / 2 - 1, u = 2 * Math.PI * r, a = Math.max(0, Math.min(1, anteil || 0));
   return `<div class="ringw" style="width:${g}px;height:${g}px"><svg width="${g}" height="${g}" viewBox="0 0 ${g} ${g}" aria-hidden="true">
-    <circle cx="${g / 2}" cy="${g / 2}" r="${r}" fill="none" stroke="var(--spur)" stroke-width="${dicke}"/>
+    <circle cx="${g / 2}" cy="${g / 2}" r="${r}" fill="none" style="stroke:color-mix(in srgb, ${farbe || 'var(--c-kcal)'} 32%, var(--spur))" stroke-width="${dicke}"/>
     ${a > 0 ? `<circle cx="${g / 2}" cy="${g / 2}" r="${r}" fill="none" stroke="${drueber ? 'var(--warn)' : (farbe || 'var(--c-kcal)')}" stroke-width="${dicke}" stroke-linecap="round" stroke-dasharray="${(a * u).toFixed(1)} ${u.toFixed(1)}" transform="rotate(-90 ${g / 2} ${g / 2})"/>` : ''}
   </svg><div>${innen}</div></div>`;
 }
