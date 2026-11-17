@@ -1059,6 +1059,8 @@ function zielAusgabe() {
 /* ---------- Auswahl-Dialog ---------- */
 const dlg = $('dlg');
 dlg.addEventListener('close', () => stopKamera());
+/* Esc-Taste: ungespeicherte Mahlzeit nicht einfach verwerfen */
+dlg.addEventListener('cancel', ev => { if (!bauVerlassenOk()) ev.preventDefault(); });
 let P = null;
 function oeffne(m, fab) {
   P = { m, fab, suche: '', reiter: 'alle', kat: D.favoriten.length ? 'Favoriten' : KATEGORIEN[0], lm: null, edit: null, g: null, schnell: false };
@@ -1152,9 +1154,10 @@ function zeichneRezMenge() {
   dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf">${P.edit ? '<span></span>' : '<button class="knopf2" data-a="zurueck">‹ Zurück</button>'}<button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
     <h2>${esc(r.name)}</h2>
     <p class="klein" style="margin:0">${r.teile.map(t => esc(t.name) + ' ' + mengeText(t.g, t.einh || 'g')).join(' · ')}</p>
+    ${P.edit ? `<p class="klein" style="margin:0">Hier änderst du nur diesen Eintrag im Tagebuch.${rezNach(r.name) ? ' Die Zutaten der gespeicherten Mahlzeit änderst du über „Mahlzeit bearbeiten“.' : ''}</p>` : ''}
     <label class="feld" style="margin:0"><span>Menge in g <span class="klein" style="font-weight:400">(ganze Mahlzeit = ${zahl(rezG(r), 1)} g)</span></span><input id="portionen" inputmode="decimal" value="${zahl(P.faktor * rezG(r), 1)}"></label>
     <div class="vorschau" id="vs"></div>
-    <div style="display:flex;gap:8px">${!P.edit && rezNach(r.name) ? `<button class="knopf2" data-a="bauEdit" data-v="${esc(r.name)}">Bearbeiten</button>` : ''}<button class="knopf" data-a="rezEintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
+    <div style="display:flex;gap:8px">${rezNach(r.name) ? `<button class="knopf2" data-a="bauEdit" data-v="${esc(r.name)}">${P.edit ? 'Mahlzeit bearbeiten' : 'Bearbeiten'}</button>` : ''}<button class="knopf" data-a="rezEintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
   zeigeRezVorschau();
 }
 function zeigeRezVorschau() {
@@ -1192,6 +1195,12 @@ function oeffneBau(teile, alt, ausPicker) {
   P.ausPicker = !!ausPicker; P.rez = null; P.lm = null; P.schnell = false;
   P.bau = { name: alt || '', teile: teile.map(t => ({ ...t })), alt: alt || null, waehlen: false, suche: '' };
   zeichneDlg(); if (!dlg.open) dlg.showModal();
+}
+/* true = darf geschlossen werden; bei ungespeicherten Änderungen wird vorher gefragt (und ggf. gespeichert) */
+function bauVerlassenOk() {
+  if (!P || !P.bau || !P.bau.geaendert) return true;
+  if (confirm('Deine Änderungen an der Mahlzeit sind noch nicht gespeichert. Jetzt speichern?\n\nOK = speichern · Abbrechen = verwerfen')) { if (P.bau.waehlen) { P.bau.waehlen = false; zeichneDlg(); } bauSpeichern(); return false; }
+  return true;
 }
 function endeBau() {
   if (P.ausPicker) { P.bau = null; P.reiter = 'mahlzeiten'; zeichneDlg(); }
@@ -1239,7 +1248,11 @@ function bauSpeichern() {
   if (!name) { $('bauName').focus(); return zeige('Bitte gib der Mahlzeit einen Namen.'); }
   if (!b.teile.length) return zeige('Bitte mindestens eine Zutat hinzufügen.');
   if (b.teile.some(t => !(t.g > 0))) return zeige('Bitte bei jeder Zutat eine Grammzahl eingeben.');
-  if ((rezNach(name) && name !== b.alt) || lmNach(name)) return zeige('Diesen Namen gibt es schon.');
+  if (lmNach(name)) return zeige('So heißt schon ein Nahrungsmittel. Bitte einen anderen Namen wählen.');
+  if (rezNach(name) && name !== b.alt) {
+    if (!confirm(`Die Mahlzeit „${name}“ gibt es schon. Mit diesen Zutaten überschreiben?`)) return zeige('Nicht gespeichert. Wähl einen anderen Namen oder überschreib die bestehende Mahlzeit.');
+    D.rezepte = D.rezepte.filter(r => r.name !== name || r.name === b.alt);
+  }
   const neu = { name, teile: b.teile.map(t => ({ ...t })) };
   if (b.alt) {
     const i = D.rezepte.findIndex(r => r.name === b.alt);
@@ -1476,7 +1489,7 @@ const AKTION = {
   mz(v) { P.m = v; zeichneDlg(); },
   bereich(v) { S.bereich = Number(v); render(); },
   neu(v) { oeffne(v); },
-  zu() { dlg.close(); },
+  zu() { if (bauVerlassenOk()) dlg.close(); },
   kat(v) { P.kat = v; P.suche = ''; zeichneDlg(); },
   wahl(v) { P.lm = lmNach(v); P.g = D.mengen[v] || P.lm.pg || 100; zeichneDlg(); },
   rezWahl(v) { P.rez = rezNach(v); P.faktor = D.mengen['rez:' + v] || 1; zeichneDlg(); },
@@ -1490,19 +1503,19 @@ const AKTION = {
   kopierenDlg() { AKTION.kopieren(P.m); toast('✓ Mahlzeit vom Vortag übernommen'); zeichneListe(); },
   bauNeu() { oeffneBau([], null, true); },
   bauNeuEigene() { oeffneBau([], null, false); },
-  bauEdit(v) { const r = rezNach(v); if (r) oeffneBau(r.teile, r.name, true); },
+  bauEdit(v) { const r = rezNach(v); if (r) oeffneBau(r.teile, r.name, !P.edit); },
   bauEditEigene(v) { const r = rezNach(v); if (r) oeffneBau(r.teile, r.name, false); },
-  bauAbbruch() { endeBau(); },
+  bauAbbruch() { if (!bauVerlassenOk()) return; endeBau(); },
   bauPlus() { P.bau.waehlen = true; P.bau.suche = ''; zeichneDlg(); },
   bauZurueck() { P.bau.waehlen = false; zeichneDlg(); },
   bauNimm(v) {
     const l = lmNach(v); if (!l) return;
-    P.bau.teile.push({ name: l.name, g: stdMenge(l), einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f });
+    P.bau.teile.push({ name: l.name, g: stdMenge(l), einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f }); P.bau.geaendert = true;
     P.bau.waehlen = false; zeichneDlg();
     const fe = dlg.querySelectorAll('[data-bt]'), letztes = fe[fe.length - 1];
     if (letztes) { letztes.focus(); letztes.select(); }
   },
-  bauWeg(v) { P.bau.teile.splice(Number(v), 1); zeichneDlg(); },
+  bauWeg(v) { P.bau.teile.splice(Number(v), 1); P.bau.geaendert = true; zeichneDlg(); },
   bauSpeichern,
   bauLoeschen() {
     const alt = P.bau.alt;
@@ -1555,7 +1568,7 @@ const AKTION = {
   import() { $('datei').click(); },
 };
 document.addEventListener('click', ev => {
-  if (ev.target === dlg) { dlg.close(); return; }
+  if (ev.target === dlg) { if (bauVerlassenOk()) dlg.close(); return; }
   const b = ev.target.closest('[data-a]');
   if (b && !b.disabled) AKTION[b.dataset.a](b.dataset.v, b);
 });
@@ -1567,8 +1580,8 @@ document.addEventListener('input', ev => {
   else if (/^mp_[kef]$/.test(t.id)) { const m = t.id.slice(3); P.zd.proz[m] = num(t.value) || 0; zdGrammNeu(); zdSumme(); }
   else if (/^mg_[kef]$/.test(t.id)) { const m = t.id.slice(3), g = num(t.value) || 0; if (P.zd.kcal) { P.zd.proz[m] = g * KCAL_G[m] / P.zd.kcal * 100; $('mp_' + m).value = zahl(P.zd.proz[m], 1); } zdSumme(); }
   else if (t.id === 'portionen') { const g = num(t.value), ges = rezG(P.rez); P.faktor = g > 0 && ges > 0 ? g / ges : null; zeigeRezVorschau(); }
-  else if (t.id === 'bauName') { P.bau.name = t.value; }
-  else if (t.dataset.bt) { P.bau.teile[Number(t.dataset.bt)].g = num(t.value) || 0; zeigeBauSumme(); }
+  else if (t.id === 'bauName') { P.bau.name = t.value; P.bau.geaendert = true; }
+  else if (t.dataset.bt) { P.bau.teile[Number(t.dataset.bt)].g = num(t.value) || 0; P.bau.geaendert = true; zeigeBauSumme(); }
   else if (t.id === 'bauSuch') { P.bau.suche = t.value; zeichneBauListe(); }
   else if (t.dataset.p) { D.profil[t.dataset.p] = num(t.value); sichern(); $('zielAus').innerHTML = zielAusgabe(); }
 });
