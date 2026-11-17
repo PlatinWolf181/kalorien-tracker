@@ -17,12 +17,14 @@ try { var t = localStorage.getItem('kalorien-thema'); if (t) document.documentEl
   --bg: #121722; --bg2: #24344a; --flaeche: #1e2430; --flaeche2: #2a3240; --ink: #f1f3f6; --ink2: #aeb6c2;
   --linie: #333c4b; --akzent: #5aa2f5; --akzent-ink: #0b1626; --warn: #ff9a5c; --spur: #39434f;
   --pille: #1e3350; --pille-ink: #7cb8fb; --nav: #1a202b; --teal: #3cc4b4; --pink: #f0628a;
+  --c-kcal: #34a874; --c-k: #4a8fe0; --c-e: #e05656; --c-f: #c08a10;
 }
 :root[data-thema="hell"] {
   color-scheme: light;
   --bg: #f1f3f7; --bg2: #dfe7f2; --flaeche: #ffffff; --flaeche2: #e9edf3; --ink: #171c24; --ink2: #525b68;
   --linie: #dde2ea; --akzent: #1f6fd6; --akzent-ink: #ffffff; --warn: #bb3f0b; --spur: #e3e7ee;
   --pille: #dfeafa; --pille-ink: #1a5fb8; --nav: #ffffff; --teal: #0f8a7d; --pink: #c8325c;
+  --c-kcal: #1e9e62; --c-k: #1f6fd6; --c-e: #d64545; --c-f: #c08a10;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -129,7 +131,7 @@ select.chip { -webkit-appearance: none; appearance: none; border: 0; width: auto
 .saeulen { display: flex; justify-content: space-between; gap: 6px; height: 140px; }
 .saeule { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .saeule .spur { flex: 1; width: 100%; max-width: 20px; background: var(--spur); border-radius: 10px; position: relative; overflow: hidden; }
-.saeule .spur i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--akzent); border-radius: 10px; }
+.saeule .spur i { position: absolute; left: 0; right: 0; bottom: 0; background: var(--c-kcal); border-radius: 10px; }
 .saeule .spur i.drueber { background: var(--warn); }
 .saeule > span { font-size: 13px; color: var(--ink2); }
 .ue-gew { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
@@ -152,6 +154,7 @@ select.chip { -webkit-appearance: none; appearance: none; border: 0; width: auto
 .kreis.blau { background: var(--akzent); color: var(--akzent-ink); }
 .kreis.pink { background: var(--pink); color: #fff; }
 .schnellmenue .menue-karte { background: var(--flaeche2); border-radius: 14px; padding: 0 14px; }
+.punkt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; flex: none; }
 .chips.tagart { margin-top: 12px; align-items: center; }
 .chips.zeile { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); }
 .chips.zeile::-webkit-scrollbar { display: none; }
@@ -704,7 +707,7 @@ function viewAnalyse(t, s, z) {
     const anteil = gesamt ? w / gesamt * 100 : 0;
     h += `<div class="ana"><div class="ana-z"><span>${esc(e.name)}<br><span class="klein">${mahlzeit(e.m)}${e.schnell ? '' : ' · ' + eintragMenge(e)}</span></span>
       <span><b>${fmtN(w)} ${einh}</b> <span class="klein">· ${zahl(Math.round(anteil))} %</span></span></div>
-      <div class="balken duenn"><i style="width:${anteil}%"></i></div></div>`;
+      <div class="balken duenn"><i style="width:${anteil}%;background:${FARBE[S.analyse] || 'var(--akzent)'}"></i></div></div>`;
   }
   if (!zeilen.length) h += `<p class="klein" style="margin:0">Keine Werte für ${titel} erfasst.</p>`;
   if (ohneWerte) h += `<p class="klein" style="margin:10px 0 0">${makro ? 'Einträge mit „Nur Kalorien" haben keine Nährwerte und fehlen hier.' : 'Schnelleinträge und eigene Lebensmittel haben keine Vitamin-Daten und fehlen hier.'}</p>`;
@@ -735,15 +738,18 @@ function wochenLeiste(z) {
     const zk = ziele(k).kcal, anteil = kcal > 0 ? (zk ? Math.min(1, kcal / zk) : 1) : 0;
     return `<button class="wt ${k === S.datum ? 'an' : ''}" data-a="gehe" data-v="${k}" ${k > ht ? 'disabled' : ''} aria-label="${langDatum(k)}"><i></i><span>${b}</span>
       <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="${r}" fill="none" stroke="currentColor" stroke-width="2" ${k === ht && !kcal ? 'stroke-dasharray="4 3"' : ''}/>
-      ${anteil ? `<circle cx="16" cy="16" r="${r}" fill="none" stroke="${zk && kcal > zk ? 'var(--warn)' : 'var(--akzent)'}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(anteil * u).toFixed(1)} ${u.toFixed(1)}" transform="rotate(-90 16 16)"/>` : ''}</svg></button>`;
+      ${anteil ? `<circle cx="16" cy="16" r="${r}" fill="none" stroke="${zk && kcal > zk ? 'var(--warn)' : 'var(--c-kcal)'}" stroke-width="3" stroke-linecap="round" stroke-dasharray="${(anteil * u).toFixed(1)} ${u.toFixed(1)}" transform="rotate(-90 16 16)"/>` : ''}</svg></button>`;
   }).join('') + '</div>';
 }
 /* Fortschrittsring: g = Größe, dicke = Strichstärke, anteil 0–1 */
-function ringSvg(g, dicke, anteil, drueber, innen) {
+const FARBE = { kcal: 'var(--c-kcal)', k: 'var(--c-k)', e: 'var(--c-e)', f: 'var(--c-f)' };
+const MAKRO_KEY = { Kohlenhydrate: 'k', KH: 'k', Fette: 'f', Fett: 'f', 'Eiweiß': 'e', Kalorien: 'kcal' };
+const punkt = m => `<i class="punkt" style="background:${FARBE[m]}"></i>`;
+function ringSvg(g, dicke, anteil, drueber, innen, farbe) {
   const r = (g - dicke) / 2 - 1, u = 2 * Math.PI * r, a = Math.max(0, Math.min(1, anteil || 0));
   return `<div class="ringw" style="width:${g}px;height:${g}px"><svg width="${g}" height="${g}" viewBox="0 0 ${g} ${g}" aria-hidden="true">
     <circle cx="${g / 2}" cy="${g / 2}" r="${r}" fill="none" stroke="var(--spur)" stroke-width="${dicke}"/>
-    ${a > 0 ? `<circle cx="${g / 2}" cy="${g / 2}" r="${r}" fill="none" stroke="${drueber ? 'var(--warn)' : 'var(--akzent)'}" stroke-width="${dicke}" stroke-linecap="round" stroke-dasharray="${(a * u).toFixed(1)} ${u.toFixed(1)}" transform="rotate(-90 ${g / 2} ${g / 2})"/>` : ''}
+    ${a > 0 ? `<circle cx="${g / 2}" cy="${g / 2}" r="${r}" fill="none" stroke="${drueber ? 'var(--warn)' : (farbe || 'var(--c-kcal)')}" stroke-width="${dicke}" stroke-linecap="round" stroke-dasharray="${(a * u).toFixed(1)} ${u.toFixed(1)}" transform="rotate(-90 ${g / 2} ${g / 2})"/>` : ''}
   </svg><div>${innen}</div></div>`;
 }
 function makro(titel, ist, soll) {
@@ -754,7 +760,7 @@ function makro(titel, ist, soll) {
     wert = zahl(Math.abs(rest)); unter = rest < 0 ? 'g drüber' : 'g übrig';
   }
   return `<div class="makro"><div class="name">${titel}</div>
-    ${ringSvg(66, 7, soll ? ist / soll : 0, zuviel, `<b>${wert}</b>`)}
+    ${ringSvg(66, 7, soll ? ist / soll : 0, zuviel, `<b>${wert}</b>`, FARBE[MAKRO_KEY[titel]])}
     <div class="klein">${unter}</div></div>`;
 }
 function viewHeute() {
@@ -851,7 +857,7 @@ function viewFortDetails() {
     ${kachel(imZiel != null ? imZiel + ' / ' + n : n, imZiel != null ? 'Tage im Kalorienziel' : 'erfasste Tage')}
     ${kachel(delta != null ? (delta > 0 ? '+' : delta < 0 ? '−' : '') + zahl(Math.abs(delta), 1) + ' kg' : '–', 'Gewicht im Zeitraum')}</div>`;
   if (S.fTab === 'kalorien') h += `<section class="karte"><h2>Kalorien je Tag</h2>
-    ${z.kcal ? `<div class="legende"><span><i style="background:var(--akzent)"></i>bis Ziel</span><span><i style="background:var(--warn)"></i>über Ziel</span><span>– – ${(D.profil.tagesziele || []).length ? 'Standardziel' : 'Ziel'} ${zahl(z.kcal)} kcal</span></div>` : ''}
+    ${z.kcal ? `<div class="legende"><span><i style="background:var(--c-kcal)"></i>bis Ziel</span><span><i style="background:var(--warn)"></i>über Ziel</span><span>– – ${(D.profil.tagesziele || []).length ? 'Standardziel' : 'Ziel'} ${zahl(z.kcal)} kcal</span></div>` : ''}
     <div class="chart" id="cKcal"></div></section>`;
   const gTage = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
   const gStart = gTage.length ? D.tage[gTage[0]].gewicht : D.profil.gewicht, gAkt = gTage.length ? D.tage[gTage[gTage.length - 1]].gewicht : null;
@@ -895,7 +901,7 @@ function zeichneCharts() {
       if (!d || d.kcal <= 0) return;
       const zt = ziele(keys[i]).kcal;
       const x0 = x(i) - bw / 2, yt = y(d.kcal), yb = y(0), r = Math.min(4, bw / 2, yb - yt);
-      s += `<path fill="${zt && d.kcal > zt ? 'var(--warn)' : 'var(--akzent)'}" d="M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x0 + bw - r}Q${x0 + bw} ${yt} ${x0 + bw} ${yt + r}V${yb}Z"/>`;
+      s += `<path fill="${zt && d.kcal > zt ? 'var(--warn)' : 'var(--c-kcal)'}" d="M${x0} ${yb}V${yt + r}Q${x0} ${yt} ${x0 + r} ${yt}H${x0 + bw - r}Q${x0 + bw} ${yt} ${x0 + bw} ${yt + r}V${yb}Z"/>`;
     });
     if (z.kcal) s += `<line x1="${L}" x2="${W - R}" y1="${y(z.kcal)}" y2="${y(z.kcal)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
     s += achseX(keys, x, H, U);
@@ -1007,8 +1013,8 @@ function viewZiele() {
 }
 function viewMakroziele() {
   const p = D.profil, z = ziele(null, 'basis'), b = berechnet();
-  const zeilen = (kcal, proz, aktion, v, hinweis) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>Kalorien${hinweis ? ` <span class="klein">${hinweis}</span>` : ''}</span><b>${kcal ? zahl(kcal) : '–'}</b></button>`
-    + [['k', 'Kohlenhydrate'], ['e', 'Eiweiß'], ['f', 'Fette']].map(([m, n]) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>${n} <span class="klein">${kcal ? zahl(gramm(kcal, proz[m], m)) + ' g' : ''}</span></span><b>${zahl(proz[m], 1)} %</b></button>`).join('');
+  const zeilen = (kcal, proz, aktion, v, hinweis) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>${punkt('kcal')}Kalorien${hinweis ? ` <span class="klein">${hinweis}</span>` : ''}</span><b>${kcal ? zahl(kcal) : '–'}</b></button>`
+    + [['k', 'Kohlenhydrate'], ['e', 'Eiweiß'], ['f', 'Fette']].map(([m, n]) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>${punkt(m)}${n} <span class="klein">${kcal ? zahl(gramm(kcal, proz[m], m)) + ' g' : ''}</span></span><b>${zahl(proz[m], 1)} %</b></button>`).join('');
   const tz = p.tagesziele || [];
   return `<section class="karte"><h2>Standardziel</h2>
     ${zeilen(z.kcal, z.proz, 'zielStd', '', p.zielKcal ? 'selbst festgelegt' : (b.kcal ? 'aus deinen Daten berechnet' : ''))}
@@ -1129,7 +1135,7 @@ function vorschauHtml(wVon, text) {
   const z = ziele();
   const teil = (titel, f, einh, soll) => {
     const wert = wVon(f), a = soll ? wert / soll : 0;
-    return `<div>${ringSvg(56, 6, a, false, soll ? `<b>${zahl(Math.round(a * 100))}<small>%</small></b>` : `<b>${zahl(Math.round(wert))}</b>`)}
+    return `<div>${ringSvg(56, 6, a, false, soll ? `<b>${zahl(Math.round(a * 100))}<small>%</small></b>` : `<b>${zahl(Math.round(wert))}</b>`, FARBE[f])}
       <span class="klein">${titel}<br>${zahl(wert < 10 && wert > 0 ? wert : Math.round(wert), 1)} ${einh}</span></div>`;
   };
   return (z.kcal ? `<div class="klein" style="margin-bottom:8px">${text || 'So viel deckt diese Menge von deinem Tagesbedarf:'}</div>` : '')
@@ -1339,7 +1345,7 @@ function zeichneZielDlg() {
       <label class="feld"><span>Kalorien pro Tag</span><input id="zdKcal" inputmode="numeric" value="${d.kcal ? Math.round(d.kcal) : ''}"></label>
       ${!istTz && b.kcal ? `<button class="knopf2" data-a="zdBerechnet" style="margin-bottom:12px">Berechneten Wert nehmen: ${zahl(b.kcal)} kcal</button>` : ''}
       <div class="mz-row mz-kopf"><span class="klein">Makro</span><span class="klein">Prozent</span><span class="klein">Gramm</span></div>
-      ${[['k', 'Kohlenhydrate'], ['e', 'Eiweiß'], ['f', 'Fette']].map(([m, n]) => `<div class="mz-row"><span>${n}</span>
+      ${[['k', 'Kohlenhydrate'], ['e', 'Eiweiß'], ['f', 'Fette']].map(([m, n]) => `<div class="mz-row"><span>${punkt(m)}${n}</span>
         <label><input id="mp_${m}" inputmode="decimal" value="${zahl(d.proz[m], 1)}" aria-label="${n} in Prozent"><span class="klein">%</span></label>
         <label><input id="mg_${m}" inputmode="numeric" value="${d.kcal ? gramm(d.kcal, d.proz[m], m) : ''}" aria-label="${n} in Gramm"><span class="klein">g</span></label></div>`).join('')}
       <div class="klein" id="zdSumme" style="margin-top:8px"></div>
