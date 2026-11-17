@@ -1125,14 +1125,14 @@ function zeichneMenge() {
     <div style="display:flex;gap:8px">${!P.edit && D.eigene.some(x => x.name === l.name) ? `<button class="knopf2" data-a="eigenEdit" data-v="${esc(l.name)}">Bearbeiten</button>` : ''}<button class="knopf" data-a="eintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
   zeigeVorschau();
 }
-function vorschauHtml(wVon) {
+function vorschauHtml(wVon, text) {
   const z = ziele();
   const teil = (titel, f, einh, soll) => {
     const wert = wVon(f), a = soll ? wert / soll : 0;
     return `<div>${ringSvg(56, 6, a, false, soll ? `<b>${zahl(Math.round(a * 100))}<small>%</small></b>` : `<b>${zahl(Math.round(wert))}</b>`)}
       <span class="klein">${titel}<br>${zahl(wert < 10 && wert > 0 ? wert : Math.round(wert), 1)} ${einh}</span></div>`;
   };
-  return (z.kcal ? '<div class="klein" style="margin-bottom:8px">So viel deckt diese Menge von deinem Tagesbedarf:</div>' : '')
+  return (z.kcal ? `<div class="klein" style="margin-bottom:8px">${text || 'So viel deckt diese Menge von deinem Tagesbedarf:'}</div>` : '')
     + `<div class="vgrid">${teil('Kalorien', 'kcal', 'kcal', z.kcal)}${teil('Eiweiß', 'e', 'g', z.e)}${teil('KH', 'k', 'g', z.k)}${teil('Fett', 'f', 'g', z.f)}</div>`;
 }
 function zeigeVorschau() {
@@ -1218,8 +1218,7 @@ function zeichneBau() {
 function zeigeBauSumme() {
   const r = { teile: P.bau.teile };
   P.bau.teile.forEach((t, i) => { const el = $('zk' + i); if (el) el.textContent = zahl(Math.round(t.kcal * t.g / 100)) + ' kcal · ' + zahl(Math.round(t.e * t.g / 100)) + ' g Eiweiß'; });
-  $('bauSum').innerHTML = `<div class="klein" style="margin-bottom:6px">Ganze Mahlzeit</div><div class="vgrid">${[['kcal', 'kcal'], ['e', 'g Eiweiß'], ['k', 'g KH'], ['f', 'g Fett']]
-    .map(([f, t]) => `<div><b style="display:block;font-size:20px">${zahl(Math.round(rezWert(r, f)))}</b><span class="klein">${t}</span></div>`).join('')}</div>`;
+  $('bauSum').innerHTML = vorschauHtml(f => rezWert(r, f), 'So viel deckt die ganze Mahlzeit von deinem Tagesbedarf:');
 }
 function zeichneBauListe() {
   const q = norm(P.bau.suche.trim());
