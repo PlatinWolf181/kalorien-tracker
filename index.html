@@ -253,6 +253,7 @@ const GRUND = [
   L('Schweineschnitzel, natur', 'Fleisch & Fisch', 170, 28, 0, 6),
   L('Schnitzel, paniert', 'Fleisch & Fisch', 260, 19, 15, 13, 'Stück', 180),
   L('Bratwurst', 'Fleisch & Fisch', 310, 13, 1, 28, 'Stück', 120),
+  L('Putenhackfleisch 9,8 % Fett, roh', 'Fleisch & Fisch', 159, 17, 0.7, 9.8),
   L('Kochschinken', 'Fleisch & Fisch', 115, 20, 1, 3.5, 'Scheibe', 30),
   L('Salami', 'Fleisch & Fisch', 450, 21, 1, 40, 'Scheibe', 10),
   L('Putenbrust-Aufschnitt', 'Fleisch & Fisch', 105, 20, 1.5, 2, 'Scheibe', 25),
@@ -314,6 +315,7 @@ const GRUND = [
   L('Spinat', 'Gemüse', 23, 2.7, 0.6, 0.4),
   L('Salat, gemischt', 'Gemüse', 18, 1.3, 2, 0.2, 'Schale', 100),
   L('Zwiebel', 'Gemüse', 40, 1.2, 8, 0.2, 'Stück', 80),
+  L('Kaisergemüse (TK)', 'Gemüse', 25, 1.8, 3.1, 0.2),
   L('Mais (Dose)', 'Gemüse', 85, 3, 15, 1.2),
   L('Kidneybohnen (Dose)', 'Gemüse', 105, 7, 16, 0.6),
   L('Linsen, gekocht', 'Gemüse', 115, 9, 17, 0.4),
@@ -334,6 +336,8 @@ const GRUND = [
   L('Ketchup', 'Aufstrich & Soße', 105, 1.5, 24, 0.1, 'EL', 15),
   L('Mayonnaise', 'Aufstrich & Soße', 680, 1, 2, 75, 'EL', 15),
   L('Senf', 'Aufstrich & Soße', 90, 6, 6, 4.5, 'TL', 10),
+  L('Tomate Frito (Tomatensoße)', 'Aufstrich & Soße', 75, 1.4, 9.4, 3.5),
+  L('Sriracha-Soße', 'Aufstrich & Soße', 122, 1.8, 23, 1.3),
   L('Tomatensoße', 'Aufstrich & Soße', 60, 1.7, 8, 2, 'Portion', 150),
   L('Zucker', 'Aufstrich & Soße', 400, 0, 100, 0, 'TL', 5),
 
@@ -1669,8 +1673,11 @@ document.addEventListener('pointerup', ev => {
 let rt; addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (S.tab === 'verlauf') zeichneCharts(); }, 150); });
 /* Fertige Mahlzeiten, die einmalig unter „Meine Mahlzeiten“ angelegt werden (gelöscht = bleibt weg) */
 const VORLAGEN_MZ = [
-  { id: 'reispudding-esn', name: 'Reispudding (ESN) mit Whey Kirsche & Himbeeren',
-    teile: [['ESN Designer Rice Pudding (Pulver)', 60], ['Rühls Bestes Whey Konzentrat Kirsche', 30], ['Himbeeren', 80]] },
+  /* ersetzt die frühere Vorlage „Reispudding (ESN) …“ mit 60/30/80 g, sofern sie unverändert ist */
+  { id: 'reispudding-100', name: 'Reispudding mit Whey & Himbeeren', ersetzt: ['Reispudding (ESN) mit Whey Kirsche & Himbeeren', [60, 30, 80]],
+    teile: [['ESN Designer Rice Pudding (Pulver)', 100], ['Rühls Bestes Whey Konzentrat Kirsche', 35], ['Himbeeren', 80]] },
+  { id: 'nudeln-pute', name: 'Nudeln mit Putenhack',
+    teile: [['Nudeln, roh', 250], ['Putenhackfleisch 9,8 % Fett, roh', 200], ['Tomate Frito (Tomatensoße)', 250], ['Zwiebel', 80], ['Kaisergemüse (TK)', 200], ['Sriracha-Soße', 20]] },
 ];
 function vorlagenEinspielen() {
   D.vorlagen = D.vorlagen || [];
@@ -1679,6 +1686,10 @@ function vorlagenEinspielen() {
     if (D.vorlagen.includes(v.id)) continue;
     D.vorlagen.push(v.id); neu = true;
     const teile = v.teile.map(([n, g]) => { const l = lmNach(n); return l && { name: l.name, g, einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f }; });
+    if (v.ersetzt) {
+      const [altName, altG] = v.ersetzt, alt = rezNach(altName);
+      if (alt && alt.teile.map(t => t.g).join() === altG.join()) D.rezepte = D.rezepte.filter(r => r !== alt);
+    }
     if (teile.every(Boolean) && !rezNach(v.name)) D.rezepte.push({ name: v.name, teile });
   }
   /* Zutaten gespeicherter Mahlzeiten auf die aktuellen Nährwerte bringen (Tagebuch-Einträge bleiben, wie sie waren) */
