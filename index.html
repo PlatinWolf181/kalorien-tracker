@@ -531,10 +531,15 @@ function laden() {
   } catch (e) { return neu(); }
 }
 let D = laden(), speicherFehler = false;
+let dauerhaft = null; /* null = unbekannt, true/false = Antwort des Browsers */
 function sichern() {
-  try { localStorage.setItem(KEY, JSON.stringify(D)); speicherFehler = false; }
+  try { D.gespeichertAm = new Date().toISOString(); localStorage.setItem(KEY, JSON.stringify(D)); speicherFehler = false; }
   catch (e) { speicherFehler = true; }
+  if (dauerhaft !== true && navigator.storage && navigator.storage.persist) navigator.storage.persist().then(ok => { dauerhaft = ok; }).catch(() => {});
 }
+if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(ok => { dauerhaft = ok; }).catch(() => {});
+/* Claudes Vorschau-/Testfenster läuft auf localhost und speichert nicht dauerhaft */
+const imTestfenster = ['localhost', '127.0.0.1'].includes(location.hostname);
 
 /* ---------- Hilfen ---------- */
 const $ = id => document.getElementById(id);
@@ -682,7 +687,8 @@ function render() {
   $('nav').innerHTML = TABS.map(([id, t, ic]) => `<button data-a="tab" data-v="${id}" class="${aktiv(id) ? 'an' : ''}">${icon(ic)}<span>${t}</span></button>`).join('')
     + `<button class="fab" data-a="fab" aria-label="Eintrag hinzufügen">${icon('plus', 28)}</button>`;
   const inhalt = ({ heute: viewHeute, verlauf: viewVerlauf, mehr: viewMehr, ziele: viewZiele, makroziele: viewMakroziele, zeiten: viewZeiten, sicherung: viewSicherung }[S.tab] || viewHeute)();
-  const fehler = speicherFehler ? '<div class="hinweis warn">Speichern im Browser ist fehlgeschlagen. Bitte unter Mehr → Datensicherung eine Sicherung herunterladen.</div>' : '';
+  const fehler = (speicherFehler ? '<div class="hinweis warn">Speichern im Browser ist fehlgeschlagen. Bitte unter Mehr → Datensicherung eine Sicherung herunterladen.</div>' : '')
+    + (imTestfenster ? '<div class="hinweis warn testfenster">Achtung: Das ist Claudes Vorschaufenster. Hier wird nichts dauerhaft gespeichert. Öffne die App über die Desktop-Verknüpfung „Kalorien-Tracker“ (platinwolf181.github.io/kalorien-tracker).</div>' : '');
   $('app').innerHTML = fehler + inhalt;
   if (S.tab === 'verlauf' && S.fTab !== 'ueberblick') zeichneCharts();
 }
@@ -1035,7 +1041,20 @@ function viewZeiten() {
   </section>`;
 }
 function viewSicherung() {
-  return `<section class="karte">
+  const tage = Object.keys(D.tage).filter(k => (D.tage[k].eintraege || []).length || D.tage[k].gewicht != null || D.tage[k].wasser);
+  const eintraege = Object.values(D.tage).reduce((a, t) => a + (t.eintraege || []).length, 0);
+  const zuletzt = D.gespeichertAm ? new Date(D.gespeichertAm) : null;
+  const zeile = (t, w) => `<div class="zl" style="cursor:default"><span>${t}</span><b>${w}</b></div>`;
+  return `<section class="karte"><h2>In diesem Browser gespeichert</h2>
+    ${zeile('Tage mit Einträgen', zahl(tage.length))}
+    ${zeile('Einträge im Tagebuch', zahl(eintraege))}
+    ${zeile('Meine Mahlzeiten', zahl(D.rezepte.length))}
+    ${zeile('Eigene Nahrungsmittel', zahl(D.eigene.length))}
+    ${zeile('Zuletzt gespeichert', zuletzt ? zuletzt.toLocaleDateString('de-DE') + ', ' + zuletzt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : '–')}
+    ${zeile('Dauerhaft gesichert', imTestfenster ? 'nein (Vorschaufenster)' : dauerhaft === true ? 'ja' : dauerhaft === false ? 'Browser entscheidet' : 'unbekannt')}
+    <p class="klein" style="margin:10px 0 0">${imTestfenster ? 'Im Claude-Vorschaufenster gehen die Daten beim Schließen verloren. Nutze die Desktop-Verknüpfung.' : 'Die Daten liegen nur in diesem Browser auf diesem Gerät. Browser-Bereinigungen (z. B. „Browserdaten löschen“ oder der GX Cleaner) löschen sie mit.'}</p>
+  </section>
+  <section class="karte">
     <p class="klein" style="margin-top:0">Deine Daten liegen nur in diesem Browser. Die Sicherung nimmst du auch für den Abgleich zwischen PC und Handy.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="knopf2" data-a="export">Sicherung herunterladen</button><button class="knopf2" data-a="import">Sicherung einspielen</button></div>
   </section>`;
