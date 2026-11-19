@@ -1457,6 +1457,7 @@ function oeffneZiel(wo) {
   if (wo === 'std') P = { zd: { wo, kcal: std.kcal, proz: { ...std.proz }, tage: [] } };
   else if (wo === 'neu') P = { zd: { wo, kcal: std.kcal, proz: { ...std.proz }, tage: [] } };
   else { const t = p.tagesziele[wo]; P = { zd: { wo, kcal: t.kcal, proz: { ...t.proz }, tage: [...t.tage] } }; }
+  P.zd.g = { k: gramm(P.zd.kcal, P.zd.proz.k, 'k') || 0, e: gramm(P.zd.kcal, P.zd.proz.e, 'e') || 0, f: gramm(P.zd.kcal, P.zd.proz.f, 'f') || 0 };
   zeichneZielDlg(); if (!dlg.open) dlg.showModal();
 }
 function zeichneZielDlg() {
@@ -1467,6 +1468,7 @@ function zeichneZielDlg() {
       ${istTz ? `<div class="feld"><span>Wochentage</span><div class="chips">${WOCHENTAGE.map(([n, t]) => `<button class="chip ${d.tage.includes(n) ? 'an' : ''}" data-a="zdTag" data-v="${n}" ${belegt.includes(n) ? 'disabled title="hat schon ein Tagesziel"' : ''}>${t}</button>`).join('')}</div></div>` : ''}
       <label class="feld"><span>Kalorien pro Tag</span><input id="zdKcal" inputmode="numeric" value="${d.kcal ? Math.round(d.kcal) : ''}"></label>
       ${!istTz && b.kcal ? `<button class="knopf2" data-a="zdBerechnet" style="margin-bottom:12px">Berechneten Wert nehmen: ${zahl(b.kcal)} kcal</button>` : ''}
+      <p class="klein" style="margin:0 0 6px">Änderst du die Gramm, passen sich die Kalorien von selbst an. Änderst du die Prozente, bleiben die Kalorien gleich.</p>
       <div class="mz-row mz-kopf"><span class="klein">Makro</span><span class="klein">Prozent</span><span class="klein">Gramm</span></div>
       ${[['k', 'Kohlenhydrate'], ['e', 'Eiweiß'], ['f', 'Fette']].map(([m, n]) => `<div class="mz-row"><span>${punkt(m)}${n}</span>
         <label><input id="mp_${m}" inputmode="decimal" value="${zahl(d.proz[m], 1)}" aria-label="${n} in Prozent"><span class="klein">%</span></label>
@@ -1481,7 +1483,7 @@ function zdSumme() {
   const p = P.zd.proz, s = p.k + p.e + p.f, ok = Math.abs(s - 100) <= 0.5;
   const el = $('zdSumme'); el.textContent = `Zusammen ${zahl(s, 1)} %${ok ? '' : ' – es müssen 100 % sein'}`; el.className = ok ? 'klein' : 'warn';
 }
-function zdGrammNeu() { for (const m of ['k', 'e', 'f']) { const el = $('mg_' + m); if (el && document.activeElement !== el) el.value = P.zd.kcal ? gramm(P.zd.kcal, P.zd.proz[m], m) : ''; } }
+function zdGrammNeu() { for (const m of ['k', 'e', 'f']) { const g = P.zd.kcal ? gramm(P.zd.kcal, P.zd.proz[m], m) : 0; P.zd.g[m] = g; const el = $('mg_' + m); if (el && document.activeElement !== el) el.value = g || ''; } }
 function zdSpeichern() {
   const d = P.zd, p = D.profil, fe = $('zdFehler'), zeige = t => { fe.textContent = t; fe.hidden = false; };
   if (d.wo !== 'std' && !d.tage.length) return zeige('Bitte mindestens einen Wochentag antippen.');
@@ -1691,7 +1693,13 @@ document.addEventListener('input', ev => {
   else if (t.id === 'menge') { P.g = num(t.value); zeigeVorschau(); }
   else if (t.id === 'zdKcal') { P.zd.kcal = num(t.value); P.zd.kcalGeaendert = true; zdGrammNeu(); }
   else if (/^mp_[kef]$/.test(t.id)) { const m = t.id.slice(3); P.zd.proz[m] = num(t.value) || 0; zdGrammNeu(); zdSumme(); }
-  else if (/^mg_[kef]$/.test(t.id)) { const m = t.id.slice(3), g = num(t.value) || 0; if (P.zd.kcal) { P.zd.proz[m] = g * KCAL_G[m] / P.zd.kcal * 100; $('mp_' + m).value = zahl(P.zd.proz[m], 1); } zdSumme(); }
+  else if (/^mg_[kef]$/.test(t.id)) {
+    P.zd.g[t.id.slice(3)] = num(t.value) || 0;
+    const g = P.zd.g, kc = 4 * g.k + 4 * g.e + 9 * g.f;
+    P.zd.kcal = kc; P.zd.kcalGeaendert = true;
+    for (const x of ['k', 'e', 'f']) { P.zd.proz[x] = kc ? g[x] * KCAL_G[x] / kc * 100 : 0; $('mp_' + x).value = zahl(P.zd.proz[x], 1); }
+    $('zdKcal').value = Math.round(kc); zdSumme();
+  }
   else if (t.id === 'portionen') { const g = num(t.value), ges = rezG(P.rez); P.faktor = g > 0 && ges > 0 ? g / ges : null; zeigeRezVorschau(); }
   else if (t.id === 'bauName') { P.bau.name = t.value; P.bau.geaendert = true; }
   else if (t.dataset.bt) { P.bau.teile[Number(t.dataset.bt)].g = num(t.value) || 0; P.bau.geaendert = true; zeigeBauSumme(); }
