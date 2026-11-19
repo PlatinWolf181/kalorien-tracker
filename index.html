@@ -155,6 +155,7 @@ select.chip { -webkit-appearance: none; appearance: none; border: 0; width: auto
 .kreis.pink { background: var(--pink); color: #fff; }
 .schnellmenue .menue-karte { background: var(--flaeche2); border-radius: 14px; padding: 0 14px; }
 .punkt { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; flex: none; }
+#fSupp, #fEan { padding-right: 8px; }
 .chips.tagart { margin-top: 12px; align-items: center; }
 .chips.zeile { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-left: -16px; margin-right: -16px; padding: 0 16px 2px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent); }
 .chips.zeile::-webkit-scrollbar { display: none; }
@@ -619,7 +620,8 @@ const imTestfenster = ['localhost', '127.0.0.1'].includes(location.hostname);
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const zahl = (n, st = 0) => Number(n).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: st });
-const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) ? n : null; };
+/* liest deutsche Zahlen: „1.000“ = tausend, „2,5“ = zweieinhalb */
+const num = v => { let s = String(v == null ? '' : v).trim(); if (/^\d{1,3}(\.\d{3})+(,\d*)?$/.test(s)) s = s.replace(/\./g, ''); const n = parseFloat(s.replace(',', '.')); return isFinite(n) ? n : null; };
 const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
 const p2 = n => String(n).padStart(2, '0');
 const schluessel = d => d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate());
@@ -638,12 +640,13 @@ function tag(k) { if (!D.tage[k]) D.tage[k] = { eintraege: [], gewicht: null }; 
 const nw = (e, feld) => e.teile ? e.faktor * e.teile.reduce((a, t) => a + t[feld] * t.g / 100, 0) : e[feld] * e.g / 100;
 const fmtN = v => zahl(v, v < 1 ? 2 : v < 10 ? 1 : 0);
 /* Hat der Eintrag Vitamin-Daten? Bei Rezepten: mindestens ein Teil */
-const hatMikro = e => !e.schnell && (e.teile ? e.teile.some(t => MIKRO[t.name]) : !!MIKRO[e.name]);
+const mikroVonLM = x => x.mikro || MIKRO[x.name];
+const hatMikro = e => !e.schnell && (e.teile ? e.teile.some(t => mikroVonLM(t)) : !!mikroVonLM(e));
 /* Menge des Nährstoffs k im Eintrag (null = keine Daten) */
 function mikroWert(e, k) {
   if (!hatMikro(e)) return null;
-  if (e.teile) { let v = 0; for (const t of e.teile) { const m = MIKRO[t.name]; if (m && m[k]) v += m[k] * t.g / 100; } return v * e.faktor; }
-  return (MIKRO[e.name][k] || 0) * e.g / 100;
+  if (e.teile) { let v = 0; for (const t of e.teile) { const m = mikroVonLM(t); if (m && m[k]) v += m[k] * t.g / 100; } return v * e.faktor; }
+  return (mikroVonLM(e)[k] || 0) * e.g / 100;
 }
 function mikroSumme(liste) {
   const s = {}; let ohne = 0;
@@ -660,7 +663,7 @@ function alsTeile(liste) {
   for (const e of liste) {
     if (e.schnell) continue;
     if (e.teile) for (const t of e.teile) teile.push({ ...t, g: Math.round(t.g * e.faktor * 10) / 10 });
-    else teile.push({ name: e.name, g: e.g, einh: e.einh, kcal: e.kcal, e: e.e, k: e.k, f: e.f });
+    else teile.push({ name: e.name, g: e.g, einh: e.einh, kcal: e.kcal, e: e.e, k: e.k, f: e.f, ...(e.mikro ? { mikro: e.mikro } : {}) });
   }
   return teile;
 }
@@ -668,7 +671,15 @@ const rezWert = (r, feld) => r.teile.reduce((a, t) => a + t[feld] * t.g / 100, 0
 function summe(liste) { return liste.reduce((s, e) => ({ kcal: s.kcal + nw(e, 'kcal'), e: s.e + nw(e, 'e'), k: s.k + nw(e, 'k'), f: s.f + nw(e, 'f') }), { kcal: 0, e: 0, k: 0, f: 0 }); }
 const alleLM = () => [...D.eigene, ...GRUND];
 const lmNach = name => alleLM().find(x => x.name === name);
-const mengeText = (g, einh) => zahl(g, 1) + ' ' + einh;
+const MEHRZAHL = { Kapsel: 'Kapseln', Tablette: 'Tabletten', Tropfen: 'Tropfen', Messlöffel: 'Messlöffel' };
+const mengeText = (g, einh) => zahl(g, 1) + ' ' + (MEHRZAHL[einh] && g !== 1 ? MEHRZAHL[einh] : einh);
+const istSupp = x => !!x && x.kat === 'Supplement';
+/* kurze Zeile „Vitamin D 25 µg, Vitamin K 25 µg …“ für eine Menge */
+function suppKurz(x, menge) {
+  const m = x.mikro || {};
+  const teile = NAEHR.filter(([k]) => m[k]).slice(0, 3).map(([k, n, einh]) => n + ' ' + fmtN(m[k] * menge / 100) + ' ' + einh);
+  return teile.join(', ') || 'keine Angaben';
+}
 const rezG = r => r.teile.reduce((a, t) => a + t.g, 0);
 const eintragMenge = e => e.teile ? zahl(e.faktor * rezG(e), 1) + ' g' : mengeText(e.g, e.einh);
 
@@ -1180,6 +1191,7 @@ function oeffne(m, fab) {
 function titelM() { return (MAHLZEITEN.find(x => x[0] === P.m) || [])[1]; }
 function zeichneDlg() {
   stopKamera();
+  if (P.supp) return zeichneSupp();
   if (P.eigen) return zeichneEigen();
   if (P.code) return zeichneCode();
   if (P.schnell) return zeichneSchnell();
@@ -1200,7 +1212,7 @@ function kachelReihe(liste) {
 }
 function lmZeile(x) {
   const g = stdMenge(x), fav = D.favoriten.includes(x.name);
-  return `<div class="zeile2"><button class="wahl" data-a="wahl" data-v="${esc(x.name)}"><b>${esc(x.name)}</b><span class="klein">${zahl(Math.round(x.kcal * g / 100))} kcal · ${mengeText(g, x.einh)}</span></button>
+  return `<div class="zeile2"><button class="wahl" data-a="wahl" data-v="${esc(x.name)}"><b>${esc(x.name)}</b><span class="klein">${istSupp(x) ? mengeText(g, x.einh) + ' · ' + esc(suppKurz(x, g)) : zahl(Math.round(x.kcal * g / 100)) + ' kcal · ' + mengeText(g, x.einh)}</span></button>
     <button class="stern ${fav ? 'an' : ''}" data-a="fav" data-v="${esc(x.name)}" aria-label="Favorit">${fav ? '★' : '☆'}</button>
     <button class="plusk" data-a="plusLm" data-v="${esc(x.name)}" aria-label="${esc(x.name)} eintragen">+</button></div>`;
 }
@@ -1227,10 +1239,10 @@ function zeichneListe() {
     h += '<div class="liste-kopf">Meine Mahlzeiten</div>' + (D.rezepte.length ? D.rezepte.map(rezZeile).join('')
       : leer('Noch keine eigenen Mahlzeiten. Tippe auf „Mahlzeit erstellen", gib einen Namen ein und füge die Zutaten mit Gramm hinzu.'));
   } else {
-    const kats = ['Favoriten', 'Eigene', ...KATEGORIEN];
-    h = kachelReihe([['eigenNeu', 'plus', 'Nahrungsmittel erstellen'], ['schnell', 'blitz', 'Schnell hinzufügen']]) + `<div class="chips zeile" style="margin-top:12px">${kats.map(k => `<button class="chip ${P.kat === k ? 'an' : ''}" data-a="kat" data-v="${esc(k)}">${esc(k)}</button>`).join('')}</div>`;
-    const liste = P.kat === 'Favoriten' ? D.favoriten.map(lmNach).filter(Boolean) : P.kat === 'Eigene' ? D.eigene : GRUND.filter(x => x.kat === P.kat);
-    h += liste.map(lmZeile).join('') || leer(P.kat === 'Favoriten' ? 'Noch keine Favoriten. Tippe bei einem Nahrungsmittel auf ☆.' : 'Noch keine eigenen Nahrungsmittel. Leg oben eins an, die Werte stehen hinten auf der Packung.');
+    const kats = ['Favoriten', 'Eigene', 'Supplements', ...KATEGORIEN];
+    h = kachelReihe([P.kat === 'Supplements' ? ['suppNeu', 'plus', 'Supplement erstellen'] : ['eigenNeu', 'plus', 'Nahrungsmittel erstellen'], ['schnell', 'blitz', 'Schnell hinzufügen']]) + `<div class="chips zeile" style="margin-top:12px">${kats.map(k => `<button class="chip ${P.kat === k ? 'an' : ''}" data-a="kat" data-v="${esc(k)}">${esc(k)}</button>`).join('')}</div>`;
+    const liste = P.kat === 'Favoriten' ? D.favoriten.map(lmNach).filter(Boolean) : P.kat === 'Eigene' ? D.eigene.filter(x => !istSupp(x)) : P.kat === 'Supplements' ? D.eigene.filter(istSupp) : GRUND.filter(x => x.kat === P.kat);
+    h += liste.map(lmZeile).join('') || leer(P.kat === 'Favoriten' ? 'Noch keine Favoriten. Tippe bei einem Nahrungsmittel auf ☆.' : P.kat === 'Supplements' ? 'Noch keine Supplements. Leg oben eins an, die Angaben pro Kapsel, Tablette oder Tropfen stehen auf der Packung.' : 'Noch keine eigenen Nahrungsmittel. Leg oben eins an, die Werte stehen hinten auf der Packung.');
   }
   $('pl').innerHTML = h;
 }
@@ -1238,9 +1250,9 @@ function zeichneMenge() {
   const l = P.lm;
   dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf">${P.edit ? '<span></span>' : '<button class="knopf2" data-a="zurueck">‹ Zurück</button>'}<button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
     <h2>${esc(l.name)}</h2>
-    <label class="feld" style="margin:0"><span>Menge in ${l.einh}</span><input id="menge" inputmode="decimal" value="${zahl(P.g, 1)}"></label>
+    <label class="feld" style="margin:0"><span>${MEHRZAHL[l.einh] ? 'Anzahl (' + MEHRZAHL[l.einh] + ')' : 'Menge in ' + l.einh}</span><input id="menge" inputmode="decimal" value="${zahl(P.g, 1)}"></label>
     <div class="vorschau" id="vs"></div>
-    <div style="display:flex;gap:8px">${!P.edit && D.eigene.some(x => x.name === l.name) ? `<button class="knopf2" data-a="eigenEdit" data-v="${esc(l.name)}">Bearbeiten</button>` : ''}<button class="knopf" data-a="eintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
+    <div style="display:flex;gap:8px">${!P.edit && D.eigene.some(x => x.name === l.name) ? `<button class="knopf2" data-a="${istSupp(l) ? 'suppEdit' : 'eigenEdit'}" data-v="${esc(l.name)}">Bearbeiten</button>` : ''}<button class="knopf" data-a="eintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
   zeigeVorschau();
 }
 function vorschauHtml(wVon, text) {
@@ -1255,8 +1267,21 @@ function vorschauHtml(wVon, text) {
 }
 function zeigeVorschau() {
   const l = P.lm, g = P.g || 0;
-  $('vs').innerHTML = vorschauHtml(f => g * l[f] / 100);
+  $('vs').innerHTML = istSupp(l) || (l.mikro && !l.kcal) ? mikroVorschau(l, g) : vorschauHtml(f => g * l[f] / 100);
   dlg.querySelectorAll('[data-a="menge"]').forEach(b => b.classList.toggle('g-an', Number(b.dataset.v) === g));
+}
+/* Supplements: Wirkstoffe der gewählten Menge mit Anteil am Tagesbedarf */
+function mikroVorschau(l, menge) {
+  const m = l.mikro || {};
+  const zeilen = NAEHR.filter(([k]) => m[k]).map(([k, name, einh, ziel, max]) => {
+    const v = m[k] * menge / 100, pz = v / ziel * 100, drueber = max ? v > ziel : pz > 100;
+    return `<div class="mikro"><div class="mz"><span>${name}</span><span class="klein"><b style="color:var(--ink)">${fmtN(v)} ${einh}</b> · ${zahl(Math.round(pz))} %${max ? ' vom Höchstwert' : ''}</span></div>
+      <div class="balken duenn"><i class="${max && drueber ? 'drueber' : ''}" style="width:${Math.min(100, pz)}%"></i></div></div>`;
+  }).join('');
+  const kc = (l.kcal || 0) * menge / 100;
+  return `<div class="klein" style="margin-bottom:6px;text-align:left">So viel deckt diese Menge von deinem Tagesbedarf:</div>
+    <div style="text-align:left">${zeilen || '<p class="klein">Für dieses Supplement sind keine Wirkstoffe eingetragen.</p>'}</div>
+    ${kc >= 1 ? `<div class="klein" style="margin-top:6px;text-align:left">Dazu ${zahl(Math.round(kc))} kcal</div>` : ''}`;
 }
 /* Rezept: Portionen wählen */
 function zeichneRezMenge() {
@@ -1284,7 +1309,7 @@ function rezEintragen() {
 const neueId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 function merke(schl, menge) { D.zuletzt = [schl, ...D.zuletzt.filter(n => n !== schl)].slice(0, 25); D.mengen[schl] = menge; }
 function fuegeLm(l, g) {
-  tag(S.datum).eintraege.push({ id: neueId(), m: P.m, name: l.name, g, einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f });
+  tag(S.datum).eintraege.push({ id: neueId(), m: P.m, name: l.name, g, einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f, ...(l.mikro ? { mikro: l.mikro } : {}) });
   merke(l.name, g); sichern(); render();
 }
 function fuegeRez(r, f) {
@@ -1500,6 +1525,29 @@ function zdSpeichern() {
   }
   sichern(); dlg.close(); render(); toast('✓ Ziel gespeichert');
 }
+function zeichneSupp() {
+  const alt = P.supp.alt, d = alt && alt.dosis ? alt.dosis : { menge: 1, makro: {}, mikro: {} };
+  const einh = alt ? alt.einh : 'Kapsel', wert = v => v == null || v === 0 ? '' : zahl(v, 3);
+  const feld = ([k, n, e]) => `<label class="feld"><span>${n} (${e})</span><input name="m_${k}" inputmode="decimal" value="${wert(d.mikro[k])}"></label>`;
+  dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="knopf2" data-a="suppZurueck">‹ Zurück</button><h2>${alt ? 'Supplement bearbeiten' : 'Supplement'}</h2><span style="width:60px"></span></div>
+    <div class="liste"><form id="fSupp" ${alt ? `data-alt="${esc(alt.name)}"` : ''}>
+      <label class="feld"><span>Name</span><input name="name" required maxlength="60" placeholder="z. B. ESN Vitamin D3 + K2" value="${alt ? esc(alt.name) : ''}"></label>
+      <div class="gitter">
+        <label class="feld"><span>Einheit</span><select name="einh">${['Kapsel', 'Tablette', 'Tropfen', 'Messlöffel', 'g'].map(x => `<option value="${x}" ${x === einh ? 'selected' : ''}>${x === 'g' ? 'Gramm (Pulver)' : x}</option>`).join('')}</select></label>
+        <label class="feld"><span>Angaben pro … Einheiten</span><input name="menge" inputmode="decimal" value="${zahl(d.menge, 2)}"></label>
+      </div>
+      <p class="klein" style="margin-top:0">Trag die Werte so ein, wie sie auf der Packung stehen, zum Beispiel „pro 1 Tropfen“ oder bei Pulver „pro 5 g“. Leere Felder bleiben weg.</p>
+      <h3 class="mikro-g">Vitamine</h3><div class="gitter">${NAEHR.filter(x => x[5] === 'V').map(feld).join('')}</div>
+      <h3 class="mikro-g">Mineralstoffe</h3><div class="gitter">${NAEHR.filter(x => x[5] === 'M').map(feld).join('')}</div>
+      <details style="margin-top:8px"><summary>Kalorien und Makros (meist 0)</summary><div class="gitter" style="margin-top:8px">
+        <label class="feld"><span>kcal</span><input name="kcal" inputmode="decimal" value="${wert(d.makro.kcal)}"></label>
+        <label class="feld"><span>Eiweiß (g)</span><input name="e" inputmode="decimal" value="${wert(d.makro.e)}"></label>
+        <label class="feld"><span>Kohlenhydrate (g)</span><input name="k" inputmode="decimal" value="${wert(d.makro.k)}"></label>
+        <label class="feld"><span>Fett (g)</span><input name="f" inputmode="decimal" value="${wert(d.makro.f)}"></label></div></details>
+      <p class="warn" id="fSuppFehler" hidden></p>
+      <button class="knopf" style="width:100%;margin-top:10px">Speichern</button></form>
+      ${alt ? `<button class="knopf2" data-a="eigenLoeschen" data-v="${esc(alt.name)}" style="width:100%;margin-top:10px">Löschen</button>` : ''}</div></div>`;
+}
 function zeichneEigen() {
   const alt = P.eigen.alt;
   dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="knopf2" data-a="eigenZurueck">‹ Zurück</button><h2>${alt ? 'Bearbeiten' : 'Eigenes Nahrungsmittel'}</h2><span style="width:60px"></span></div>
@@ -1564,13 +1612,16 @@ const AKTION = {
   tab(v) { if (v === 'heute') S.datum = heute(); S.tab = v; render(); scrollTo(0, 0); },
   gehe(v) { if (v <= heute()) { S.datum = v; render(); } },
   kalender() { const e = $('dp'); if (e.showPicker) e.showPicker(); else e.click(); },
+  suppNeu() { P.supp = { alt: null }; zeichneDlg(); },
+  suppEdit(v) { const l = D.eigene.find(x => x.name === v); if (l) { P.supp = { alt: l }; zeichneDlg(); } },
+  suppZurueck() { P.supp = null; P.lm = null; zeichneDlg(); },
   eigenNeu() { P.eigen = { alt: null }; zeichneDlg(); },
   eigenEdit(v) { const l = D.eigene.find(x => x.name === v); if (l) { P.eigen = { alt: l }; zeichneDlg(); } },
   eigenZurueck() { P.eigen = null; P.lm = null; zeichneDlg(); },
   eigenLoeschen(v) {
     if (!confirm(`„${v}“ löschen? Was schon im Tagebuch steht, bleibt erhalten.`)) return;
     D.eigene = D.eigene.filter(x => x.name !== v); D.favoriten = D.favoriten.filter(n => n !== v);
-    sichern(); P.eigen = null; P.lm = null; P.reiter = 'lm'; P.kat = 'Eigene'; zeichneDlg(); toast('Gelöscht');
+    const warSupp = !!P.supp; sichern(); P.eigen = null; P.supp = null; P.lm = null; P.reiter = 'lm'; P.kat = warSupp ? 'Supplements' : 'Eigene'; zeichneDlg(); toast('Gelöscht');
   },
   dateiAnlegen() { dateiAnlegen(); },
   dateiOeffnen() { dateiOeffnen(); },
@@ -1625,7 +1676,7 @@ const AKTION = {
   bauZurueck() { P.bau.waehlen = false; zeichneDlg(); },
   bauNimm(v) {
     const l = lmNach(v); if (!l) return;
-    P.bau.teile.push({ name: l.name, g: stdMenge(l), einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f }); P.bau.geaendert = true;
+    P.bau.teile.push({ name: l.name, g: stdMenge(l), einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f, ...(l.mikro ? { mikro: l.mikro } : {}) }); P.bau.geaendert = true;
     P.bau.waehlen = false; zeichneDlg();
     const fe = dlg.querySelectorAll('[data-bt]'), letztes = fe[fe.length - 1];
     if (letztes) { letztes.focus(); letztes.select(); }
@@ -1653,7 +1704,7 @@ const AKTION = {
     const e = lies(S.datum).eintraege.find(x => x.id === v); if (!e) return;
     if (e.teile) { P = { m: e.m, edit: e.id, rez: { name: e.name, teile: e.teile }, faktor: e.faktor }; zeichneRezMenge(); dlg.showModal(); return; }
     const basis = lmNach(e.name);
-    P = { m: e.m, suche: '', kat: null, edit: e.id, g: e.g, schnell: false, lm: { name: e.name, kcal: e.kcal, e: e.e, k: e.k, f: e.f, einh: e.einh, pn: basis ? basis.pn : null, pg: basis ? basis.pg : null } };
+    P = { m: e.m, suche: '', kat: null, edit: e.id, g: e.g, schnell: false, lm: { name: e.name, kcal: e.kcal, e: e.e, k: e.k, f: e.f, einh: e.einh, pn: basis ? basis.pn : null, pg: basis ? basis.pg : null, mikro: e.mikro, kat: basis ? basis.kat : (e.mikro ? 'Supplement' : null) } };
     zeichneDlg(); dlg.showModal();
   },
   loeschen(v) { const t = tag(S.datum); t.eintraege = t.eintraege.filter(x => x.id !== v); sichern(); render(); },
@@ -1727,6 +1778,23 @@ document.addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target
 document.addEventListener('submit', ev => {
   ev.preventDefault();
   const f = new FormData(ev.target), wert = n => num(f.get(n));
+  if (ev.target.id === 'fSupp') {
+    const fe = $('fSuppFehler'), zeige = t => { fe.textContent = t; fe.hidden = false; };
+    const name = (f.get('name') || '').trim(), alt = ev.target.dataset.alt || null, einh = f.get('einh'), menge = wert('menge');
+    if (!name) return zeige('Bitte einen Namen angeben.');
+    if (!(menge > 0)) return zeige('Bitte angeben, auf wie viele Einheiten sich die Werte beziehen (meist 1).');
+    if (name !== alt && (lmNach(name) || rezNach(name))) return zeige('Diesen Namen gibt es schon.');
+    const roh = {}; for (const [k] of NAEHR) { const v = wert('m_' + k); if (v > 0) roh[k] = v; }
+    const makro = { kcal: wert('kcal') || 0, e: wert('e') || 0, k: wert('k') || 0, f: wert('f') || 0 };
+    if (!Object.keys(roh).length && !makro.kcal) return zeige('Bitte mindestens einen Wirkstoff eintragen, zum Beispiel Vitamin D.');
+    const faktor = 100 / menge, mikro = {}; for (const k in roh) mikro[k] = roh[k] * faktor;
+    const neu = L(name, 'Supplement', makro.kcal * faktor, makro.e * faktor, makro.k * faktor, makro.f * faktor, null, einh === 'g' ? menge : 1, einh);
+    neu.mikro = mikro; neu.dosis = { menge, makro, mikro: roh };
+    const i = alt ? D.eigene.findIndex(x => x.name === alt) : -1;
+    if (i >= 0) D.eigene[i] = neu; else D.eigene.unshift(neu);
+    sichern(); P.supp = null; P.lm = neu; P.g = stdMenge(neu); zeichneDlg(); toast(alt ? '✓ Geändert' : '✓ Supplement gespeichert');
+    return;
+  }
   if (ev.target.id === 'fEan') {
     const name = (f.get('name') || '').trim(), kcal = wert('kcal'), fe = $('fEanFehler'), alt = ev.target.dataset.alt || null, ean = ev.target.dataset.ean;
     const zeige = t => { fe.textContent = t; fe.hidden = false; };
