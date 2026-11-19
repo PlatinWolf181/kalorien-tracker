@@ -44,6 +44,7 @@ const NID = {
   1092: 'kal', 1087: 'ca', 1090: 'mgn', 1091: 'ph', 1089: 'fe', 1095: 'zn', 1098: 'cu', 1101: 'mn', 1103: 'se',
   1106: 'va', 1114: 'vd', 1109: 've', 1185: 'vk', 1162: 'vc',
   1165: 'b1', 1166: 'b2', 1167: 'b3', 1170: 'b5', 1175: 'b6', 1177: 'fol', 1178: 'b12',
+  1278: 'epa', 1272: 'dha',
 };
 const ids = new Set(Object.values(WAHL).map(String));
 const werte = {}; // fdc_id -> {key: amount}
@@ -59,9 +60,11 @@ for (const [app, fid] of Object.entries(WAHL)) {
   if (!w) { fehlt.push(app + '=' + fid); continue; }
   const f = FAKTOR[app] || 1, o = {};
   for (const k of Object.values(NID)) {
-    if (k === 'na') continue;
+    if (k === 'na' || k === 'epa' || k === 'dha') continue;
     if (w[k] != null && w[k] * f > 0) o[k] = rund(w[k] * f);
   }
+  /* Omega-3 = EPA + DHA, in mg */
+  const o3 = ((w.epa || 0) + (w.dha || 0)) * 1000 * f; if (o3 >= 1) o.o3 = rund(o3);
   if (w.na != null) { const salz = w.na * 2.5 / 1000 * f; if (salz >= 0.005) o.salz = Math.round(salz * 100) / 100; }
   aus += JSON.stringify(app) + ': {' + Object.entries(o).map(([k, v]) => k + ':' + v).join(',') + '},\n';
 }
