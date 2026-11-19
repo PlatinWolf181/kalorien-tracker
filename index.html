@@ -258,6 +258,7 @@ const GRUND = [
   L('Schnitzel, paniert', 'Fleisch & Fisch', 260, 19, 15, 13, 'Stück', 180),
   L('Bratwurst', 'Fleisch & Fisch', 310, 13, 1, 28, 'Stück', 120),
   L('Putenhackfleisch 9,8 % Fett, roh', 'Fleisch & Fisch', 159, 17, 0.7, 9.8),
+  L('Putengeschnetzeltes, roh', 'Fleisch & Fisch', 105, 24, 0, 1),
   L('Kochschinken', 'Fleisch & Fisch', 115, 20, 1, 3.5, 'Scheibe', 30),
   L('Salami', 'Fleisch & Fisch', 450, 21, 1, 40, 'Scheibe', 10),
   L('Putenbrust-Aufschnitt', 'Fleisch & Fisch', 105, 20, 1.5, 2, 'Scheibe', 25),
@@ -320,6 +321,7 @@ const GRUND = [
   L('Salat, gemischt', 'Gemüse', 18, 1.3, 2, 0.2, 'Schale', 100),
   L('Zwiebel', 'Gemüse', 40, 1.2, 8, 0.2, 'Stück', 80),
   L('Kaisergemüse (TK)', 'Gemüse', 25, 1.8, 3.1, 0.2),
+  L('Rote Bete, gegart (vakuumiert)', 'Gemüse', 40, 1.5, 7.8, 0.1),
   L('Mais (Dose)', 'Gemüse', 85, 3, 15, 1.2),
   L('Kidneybohnen (Dose)', 'Gemüse', 105, 7, 16, 0.6),
   L('Linsen, gekocht', 'Gemüse', 115, 9, 17, 0.4),
@@ -420,6 +422,8 @@ const MIKRO = {
 "Wrap / Tortilla": {bal:3.5,ca:146,fe:3.63,mgn:22,ph:206,kal:125,zn:0.53,cu:0.1,mn:0.54,se:22.3,b1:0.5,b2:0.28,b3:4.42,b5:0.56,b6:0.06,fol:94,vk:7.2,gesf:2.92,zuk:3.71,salz:1.84},
 "Himbeeren": {bal:6.5,ca:25,fe:0.69,mgn:22,ph:29,kal:151,zn:0.42,cu:0.09,mn:0.67,se:0.2,va:2,ve:0.87,vc:26.2,b1:0.03,b2:0.04,b3:0.6,b5:0.33,b6:0.06,fol:21,vk:7.8,gesf:0.02,zuk:4.42},
 "Milchreis, gekocht": {bal:0.1,ca:103,fe:0.37,mgn:13,ph:85,kal:128,zn:0.38,cu:0.02,mn:0.06,se:1.8,va:29,vd:0.8,vc:0.7,b1:0.07,b2:0.14,b3:0.44,b5:0.28,b6:0.03,fol:4,b12:0.24,gesf:1.68,salz:0.27},
+"Putengeschnetzeltes, roh": {ca:11,fe:0.73,mgn:28,ph:201,kal:242,zn:1.28,cu:0.07,mn:0.01,se:22.7,va:6,ve:0.06,vd:0.1,b1:0.04,b2:0.14,b3:9.92,b5:0.78,b6:0.81,fol:7,b12:0.63,gesf:0.29,zuk:0.05,o3:2,salz:0.28},
+"Rote Bete, gegart (vakuumiert)": {bal:2,ca:16,fe:0.79,mgn:23,ph:38,kal:305,zn:0.35,cu:0.07,mn:0.33,se:0.7,va:2,ve:0.04,vc:3.6,b1:0.03,b2:0.04,b3:0.33,b5:0.14,b6:0.07,fol:80,vk:0.2,gesf:0.03,zuk:7.96,salz:0.19},
 "Apfel": {bal:2.4,ca:6,fe:0.12,mgn:5,ph:11,kal:107,zn:0.04,cu:0.03,mn:0.04,va:3,ve:0.18,vc:4.6,b1:0.02,b2:0.03,b3:0.09,b5:0.06,b6:0.04,fol:3,vk:2.2,gesf:0.03,zuk:10.4},
 "Banane": {bal:2.6,ca:5,fe:0.26,mgn:27,ph:22,kal:358,zn:0.15,cu:0.08,mn:0.27,se:1,va:3,ve:0.1,vc:8.7,b1:0.03,b2:0.07,b3:0.67,b5:0.33,b6:0.37,fol:20,vk:0.5,gesf:0.11,zuk:12.2},
 "Birne": {bal:3.1,ca:9,fe:0.18,mgn:7,ph:12,kal:116,zn:0.1,cu:0.08,mn:0.05,se:0.1,va:1,ve:0.12,vc:4.3,b1:0.01,b2:0.03,b3:0.16,b5:0.05,b6:0.03,fol:7,vk:4.4,gesf:0.02,zuk:9.75},
@@ -1875,6 +1879,9 @@ const VORLAGEN_MZ = [
     teile: [['ESN Designer Rice Pudding (Pulver)', 100], ['Rühls Bestes Whey Konzentrat Kirsche', 35], ['Himbeeren', 80]] },
   { id: 'nudeln-pute', name: 'Nudeln mit Putenhack',
     teile: [['Nudeln, roh', 250], ['Putenhackfleisch 9,8 % Fett, roh', 200], ['Tomate Frito (Tomatensoße)', 250], ['Zwiebel', 80], ['Kaisergemüse (TK)', 200], ['Sriracha-Soße', 20]] },
+  /* 1 Portion = ein Fünftel vom Blech: 500 g Pute, 250 g Pilze, 3 Paprika, 2 Gemüsezwiebeln, 500 g Rote Bete, ohne Öl */
+  { id: 'ofengemuese-pute', name: 'Ofengemüse mit Pute (⅕ Blech)',
+    teile: [['Putengeschnetzeltes, roh', 100], ['Champignons', 50], ['Paprika', 90], ['Zwiebel', 100], ['Rote Bete, gegart (vakuumiert)', 100]] },
 ];
 /* Olivers Supplements laut Packung (19.11.2026); menge = Tagesdosis, Werte pro Tagesdosis */
 const VORLAGEN_SUPP = [

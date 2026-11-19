@@ -19,6 +19,7 @@ const WAHL = {
   'Kartoffeln, gekocht': 170440, 'Bratkartoffeln': 170036, 'Pommes frites': 170698,
   'Reiswaffel': 170250, 'Wrap / Tortilla': 175037,
   'Himbeeren': 167755, 'Milchreis, gekocht': 169605,
+  'Putengeschnetzeltes, roh': 171098, 'Rote Bete, gegart (vakuumiert)': 169146,
   'Apfel': 171688, 'Banane': 173944, 'Birne': 169118, 'Orange': 169097, 'Mandarine': 169105,
   'Kiwi': 168153, 'Erdbeeren': 167762, 'Heidelbeeren': 171711, 'Weintrauben': 174683,
   'Ananas': 169124, 'Wassermelone': 167765,
