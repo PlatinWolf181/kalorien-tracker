@@ -198,6 +198,9 @@ dialog::backdrop { background: rgba(0, 0, 0, .5); }
 .reiter { display: flex; border-bottom: 1px solid var(--linie); margin: 0 -16px; padding: 0 8px; }
 .reiter button { flex: 1; padding: 10px 4px; color: var(--ink2); font-weight: 600; font-size: 15px; border-bottom: 2px solid transparent; }
 .reiter button.an { color: var(--ink); border-bottom-color: var(--akzent); }
+.umsch { display: inline-flex; border: 1px solid var(--linie); border-radius: 999px; padding: 2px; gap: 2px; }
+.umsch button { padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--ink2); }
+.umsch button.an { background: var(--akzent); color: #fff; }
 .kacheln2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
 .kachelb { background: var(--flaeche2); border-radius: 14px; padding: 16px 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--akzent); font-weight: 600; font-size: 15px; text-align: center; }
 .kachelb:disabled { opacity: .4; cursor: default; }
@@ -683,7 +686,8 @@ function suppKurz(x, menge) {
   return teile.join(', ') || 'keine Angaben';
 }
 const rezG = r => r.teile.reduce((a, t) => a + t.g, 0);
-const eintragMenge = e => e.teile ? zahl(e.faktor * rezG(e), 1) + ' g' : mengeText(e.g, e.einh);
+const portionText = f => zahl(f, 2) + (Math.abs(f - 1) < 1e-9 ? ' Portion' : ' Portionen');
+const eintragMenge = e => e.teile ? portionText(e.faktor) + ' · ' + zahl(e.faktor * rezG(e), 0) + ' g' : mengeText(e.g, e.einh);
 
 function aktGewicht() {
   const ks = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
@@ -1292,13 +1296,16 @@ function zeichneRezMenge() {
     <h2>${esc(r.name)}</h2>
     <p class="klein" style="margin:0">${r.teile.map(t => esc(t.name) + ' ' + mengeText(t.g, t.einh || 'g')).join(' · ')}</p>
     ${P.edit ? `<p class="klein" style="margin:0">Hier änderst du nur diesen Eintrag im Tagebuch.${rezNach(r.name) ? ' Die Zutaten der gespeicherten Mahlzeit änderst du über „Mahlzeit bearbeiten“.' : ''}</p>` : ''}
-    <label class="feld" style="margin:0"><span>Menge in g <span class="klein" style="font-weight:400">(ganze Mahlzeit = ${zahl(rezG(r), 1)} g)</span></span><input id="portionen" inputmode="decimal" value="${zahl(P.faktor * rezG(r), 1)}"></label>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b>Menge</b><div class="umsch">${[['p', 'Portionen'], ['g', 'Gramm']].map(([id, t]) => `<button class="${P.rezEinh === id ? 'an' : ''}" data-a="rezEinh" data-v="${id}">${t}</button>`).join('')}</div></div>
+    <label class="feld" style="margin:0"><span>${P.rezEinh === 'p' ? 'Anzahl Portionen' : 'Menge in g'}</span><input id="portionen" inputmode="decimal" value="${P.faktor > 0 ? (P.rezEinh === 'p' ? zahl(P.faktor, 2) : zahl(P.faktor * rezG(r), 1)) : ''}"></label>
+    <p class="klein" id="rezInfo" style="margin:0"></p>
     <div class="vorschau" id="vs"></div>
     <div style="display:flex;gap:8px">${rezNach(r.name) ? `<button class="knopf2" data-a="bauEdit" data-v="${esc(r.name)}">${P.edit ? 'Mahlzeit bearbeiten' : 'Bearbeiten'}</button>` : ''}<button class="knopf" data-a="rezEintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
   zeigeRezVorschau();
 }
 function zeigeRezVorschau() {
-  const f = P.faktor || 0;
+  const f = P.faktor || 0, ges = rezG(P.rez);
+  $('rezInfo').textContent = '1 Portion = ganze Mahlzeit = ' + zahl(ges, 1) + ' g' + (f > 0 ? (P.rezEinh === 'p' ? ' · eingetragen: ' + zahl(f * ges, 0) + ' g' : ' · eingetragen: ' + portionText(f)) : '');
   $('vs').innerHTML = vorschauHtml(feld => rezWert(P.rez, feld) * f);
 }
 function rezEintragen() {
@@ -1662,7 +1669,8 @@ const AKTION = {
   zu() { if (bauVerlassenOk()) dlg.close(); },
   kat(v) { P.kat = v; P.suche = ''; zeichneDlg(); },
   wahl(v) { P.lm = lmNach(v); P.g = D.mengen[v] || P.lm.pg || 100; zeichneDlg(); },
-  rezWahl(v) { P.rez = rezNach(v); P.faktor = D.mengen['rez:' + v] || 1; zeichneDlg(); },
+  rezWahl(v) { P.rez = rezNach(v); P.faktor = D.mengen['rez:' + v] || 1; P.rezEinh = 'p'; zeichneDlg(); },
+  rezEinh(v) { P.rezEinh = v; zeichneRezMenge(); const i = $('portionen'); i.focus(); i.select(); },
   portion(v) { P.faktor = Number(v); $('portionen').value = zahl(P.faktor, 1); zeigeRezVorschau(); },
   rezEintragen,
   rezept(v) { oeffneBau(alsTeile(lies(S.datum).eintraege.filter(e => e.m === v)), null, false); },
@@ -1706,7 +1714,7 @@ const AKTION = {
   schnell() { P.schnell = true; zeichneDlg(); },
   bearbeiten(v) {
     const e = lies(S.datum).eintraege.find(x => x.id === v); if (!e) return;
-    if (e.teile) { P = { m: e.m, edit: e.id, rez: { name: e.name, teile: e.teile }, faktor: e.faktor }; zeichneRezMenge(); dlg.showModal(); return; }
+    if (e.teile) { P = { m: e.m, edit: e.id, rez: { name: e.name, teile: e.teile }, faktor: e.faktor, rezEinh: 'p' }; zeichneRezMenge(); dlg.showModal(); return; }
     const basis = lmNach(e.name);
     P = { m: e.m, suche: '', kat: null, edit: e.id, g: e.g, schnell: false, lm: { name: e.name, kcal: e.kcal, e: e.e, k: e.k, f: e.f, einh: e.einh, pn: basis ? basis.pn : null, pg: basis ? basis.pg : null, mikro: e.mikro, kat: basis ? basis.kat : (e.mikro ? 'Supplement' : null) } };
     zeichneDlg(); dlg.showModal();
@@ -1755,7 +1763,7 @@ document.addEventListener('input', ev => {
     for (const x of ['k', 'e', 'f']) { P.zd.proz[x] = kc ? g[x] * KCAL_G[x] / kc * 100 : 0; $('mp_' + x).value = zahl(P.zd.proz[x], 1); }
     $('zdKcal').value = Math.round(kc); zdSumme();
   }
-  else if (t.id === 'portionen') { const g = num(t.value), ges = rezG(P.rez); P.faktor = g > 0 && ges > 0 ? g / ges : null; zeigeRezVorschau(); }
+  else if (t.id === 'portionen') { const v = num(t.value), ges = rezG(P.rez); P.faktor = !(v > 0) ? null : P.rezEinh === 'p' ? v : ges > 0 ? v / ges : null; zeigeRezVorschau(); }
   else if (t.id === 'bauName') { P.bau.name = t.value; P.bau.geaendert = true; }
   else if (t.dataset.bt) { P.bau.teile[Number(t.dataset.bt)].g = num(t.value) || 0; P.bau.geaendert = true; zeigeBauSumme(); }
   else if (t.id === 'bauSuch') { P.bau.suche = t.value; zeichneBauListe(); }
