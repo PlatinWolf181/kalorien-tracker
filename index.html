@@ -1790,7 +1790,7 @@ document.addEventListener('submit', ev => {
     const makro = { kcal: wert('kcal') || 0, e: wert('e') || 0, k: wert('k') || 0, f: wert('f') || 0 };
     if (!Object.keys(roh).length && !makro.kcal) return zeige('Bitte mindestens einen Wirkstoff eintragen, zum Beispiel Vitamin D.');
     const faktor = 100 / menge, mikro = {}; for (const k in roh) mikro[k] = roh[k] * faktor;
-    const neu = L(name, 'Supplement', makro.kcal * faktor, makro.e * faktor, makro.k * faktor, makro.f * faktor, null, einh === 'g' ? menge : 1, einh);
+    const neu = L(name, 'Supplement', makro.kcal * faktor, makro.e * faktor, makro.k * faktor, makro.f * faktor, null, menge, einh);
     neu.mikro = mikro; neu.dosis = { menge, makro, mikro: roh };
     const i = alt ? D.eigene.findIndex(x => x.name === alt) : -1;
     if (i >= 0) D.eigene[i] = neu; else D.eigene.unshift(neu);
@@ -1866,6 +1866,20 @@ const VORLAGEN_MZ = [
   { id: 'nudeln-pute', name: 'Nudeln mit Putenhack',
     teile: [['Nudeln, roh', 250], ['Putenhackfleisch 9,8 % Fett, roh', 200], ['Tomate Frito (Tomatensoße)', 250], ['Zwiebel', 80], ['Kaisergemüse (TK)', 200], ['Sriracha-Soße', 20]] },
 ];
+/* Olivers Supplements laut Packung (19.11.2026); menge = Tagesdosis, Werte pro Tagesdosis */
+const VORLAGEN_SUPP = [
+  { id: 'supp-camgzn', name: 'Calcium Magnesium Zink + D3/K2 (Natural Elements)', einh: 'Tablette', menge: 2, mikro: { ca: 520, mgn: 206, zn: 5, cu: 1, mn: 1, se: 28, vd: 20, vk: 75 } },
+  { id: 'supp-msm', name: 'MSM 2000 mg + Vitamin C', einh: 'Tablette', menge: 4, mikro: { vc: 14 } },
+  { id: 'supp-d3k2', name: 'ESN Vitamin D3 + K2 Daily', einh: 'Tablette', menge: 1, mikro: { vd: 25, vk: 45 } },
+  { id: 'supp-omega3', name: 'Omega-3 1400 (Fischöl)', einh: 'Kapsel', menge: 1, mikro: { o3: 475 }, makro: { kcal: 13, f: 1.4 } },
+];
+function suppAusVorlage(v) {
+  const fk = 100 / v.menge, mk = { kcal: 0, e: 0, k: 0, f: 0, ...(v.makro || {}) }, mikro = {};
+  for (const k in v.mikro) mikro[k] = v.mikro[k] * fk;
+  const s = L(v.name, 'Supplement', mk.kcal * fk, mk.e * fk, mk.k * fk, mk.f * fk, null, v.menge, v.einh);
+  s.mikro = mikro; s.dosis = { menge: v.menge, makro: mk, mikro: { ...v.mikro } };
+  return s;
+}
 function vorlagenEinspielen() {
   D.vorlagen = D.vorlagen || [];
   let neu = false;
@@ -1878,6 +1892,11 @@ function vorlagenEinspielen() {
       if (alt && alt.teile.map(t => t.g).join() === altG.join()) D.rezepte = D.rezepte.filter(r => r !== alt);
     }
     if (teile.every(Boolean) && !rezNach(v.name)) D.rezepte.push({ name: v.name, teile });
+  }
+  for (const v of VORLAGEN_SUPP) {
+    if (D.vorlagen.includes(v.id)) continue;
+    D.vorlagen.push(v.id); neu = true;
+    if (!lmNach(v.name)) D.eigene.push(suppAusVorlage(v));
   }
   /* Zutaten gespeicherter Mahlzeiten auf die aktuellen Nährwerte bringen (Tagebuch-Einträge bleiben, wie sie waren) */
   for (const r of D.rezepte) for (const t of r.teile) {
