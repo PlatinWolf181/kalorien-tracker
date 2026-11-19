@@ -535,9 +535,83 @@ let dauerhaft = null; /* null = unbekannt, true/false = Antwort des Browsers */
 function sichern() {
   try { D.gespeichertAm = new Date().toISOString(); localStorage.setItem(KEY, JSON.stringify(D)); speicherFehler = false; }
   catch (e) { speicherFehler = true; }
+  inDateiSchreiben();
   if (dauerhaft !== true && navigator.storage && navigator.storage.persist) navigator.storage.persist().then(ok => { dauerhaft = ok; }).catch(() => {});
 }
 if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(ok => { dauerhaft = ok; }).catch(() => {});
+/* ---------- Speicherdatei auf der Festplatte (nur Chromium-Browser am PC) ---------- */
+const dateiMoeglich = typeof window.showSaveFilePicker === 'function';
+let dateiHandle = null, dateiStatus = 'aus'; /* aus | verbunden | getrennt */
+const DATEI_TYP = [{ description: 'Kalorien-Tracker-Daten', accept: { 'application/json': ['.json'] } }];
+function idbOeffnen() {
+  return new Promise((ok, fehler) => { const r = indexedDB.open('kalorien-datei', 1); r.onupgradeneeded = () => r.result.createObjectStore('h'); r.onsuccess = () => ok(r.result); r.onerror = () => fehler(r.error); });
+}
+async function handleMerken(hd) { try { const db = await idbOeffnen(); db.transaction('h', 'readwrite').objectStore('h').put(hd, 'datei'); } catch (e) { /* Merken nicht möglich: dann nur für diese Sitzung */ } }
+async function handleHolen() {
+  try { const db = await idbOeffnen(); return await new Promise(ok => { const q = db.transaction('h').objectStore('h').get('datei'); q.onsuccess = () => ok(q.result || null); q.onerror = () => ok(null); }); }
+  catch (e) { return null; }
+}
+/* Hat dieser Stand echte Daten (nicht nur leere Grundeinstellungen + Vorlagen)? */
+const hatDaten = d => !!d && (Object.values(d.tage || {}).some(t => (t.eintraege || []).length || t.gewicht != null || t.wasser)
+  || (d.eigene || []).length || !!(d.profil && (d.profil.alter || d.profil.zielKcal || d.profil.zielProz || (d.profil.tagesziele || []).length))
+  || (d.rezepte || []).length > 2);
+let dateiTimer;
+function inDateiSchreiben() {
+  if (!dateiHandle || dateiStatus !== 'verbunden') return;
+  clearTimeout(dateiTimer);
+  dateiTimer = setTimeout(async () => {
+    try { const w = await dateiHandle.createWritable(); await w.write(JSON.stringify(D, null, 1)); await w.close(); }
+    catch (e) { dateiStatus = 'getrennt'; render(); }
+  }, 600);
+}
+function standUebernehmen(d) {
+  const n = neu();
+  D = { ...n, ...d, profil: { ...n.profil, ...d.profil }, zeiten: { ...n.zeiten, ...d.zeiten } };
+  try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { speicherFehler = true; }
+}
+/* Datei und Browser abgleichen: der Stand mit echten Daten bzw. der neuere gewinnt */
+async function dateiAbgleichen() {
+  let ausDatei = null;
+  try { const txt = await (await dateiHandle.getFile()).text(); if (txt.trim()) ausDatei = JSON.parse(txt); } catch (e) { ausDatei = null; }
+  const dateiGueltig = ausDatei && typeof ausDatei.tage === 'object' && ausDatei.profil;
+  if (dateiGueltig && (!hatDaten(D) || (ausDatei.gespeichertAm || '') > (D.gespeichertAm || ''))) standUebernehmen(ausDatei);
+  dateiStatus = 'verbunden';
+  inDateiSchreiben();
+}
+async function dateiStart() {
+  if (!dateiMoeglich) return;
+  dateiHandle = await handleHolen();
+  if (!dateiHandle) { dateiStatus = 'aus'; render(); return; }
+  let recht = 'prompt';
+  try { recht = await dateiHandle.queryPermission({ mode: 'readwrite' }); } catch (e) { /* alte Browser */ }
+  if (recht === 'granted') { await dateiAbgleichen(); toast('✓ Speicherdatei verbunden'); } else dateiStatus = 'getrennt';
+  render();
+}
+async function dateiAnlegen() {
+  try {
+    const hd = await window.showSaveFilePicker({ suggestedName: 'kalorien-tracker-daten.json', types: DATEI_TYP });
+    dateiHandle = hd; await handleMerken(hd); dateiStatus = 'verbunden';
+    const w = await hd.createWritable(); await w.write(JSON.stringify(D, null, 1)); await w.close();
+    render(); toast('✓ Speicherdatei angelegt');
+  } catch (e) { if (e && e.name !== 'AbortError') alert('Die Datei konnte nicht angelegt werden.'); }
+}
+async function dateiOeffnen() {
+  try {
+    const [hd] = await window.showOpenFilePicker({ types: DATEI_TYP, multiple: false });
+    if ((await hd.requestPermission({ mode: 'readwrite' })) !== 'granted') return;
+    dateiHandle = hd; await handleMerken(hd);
+    const txt = await (await hd.getFile()).text(); const d = txt.trim() ? JSON.parse(txt) : null;
+    if (d && typeof d.tage === 'object' && d.profil) standUebernehmen(d);
+    dateiStatus = 'verbunden'; inDateiSchreiben();
+    render(); toast('✓ Daten aus der Speicherdatei geladen');
+  } catch (e) { if (e && e.name !== 'AbortError') alert('Die Datei konnte nicht geöffnet werden. Ist es eine Kalorien-Tracker-Datei?'); }
+}
+async function dateiVerbinden() {
+  try {
+    if ((await dateiHandle.requestPermission({ mode: 'readwrite' })) !== 'granted') return;
+    await dateiAbgleichen(); render(); toast('✓ Speicherdatei verbunden');
+  } catch (e) { dateiStatus = 'getrennt'; render(); }
+}
 /* Claudes Vorschau-/Testfenster läuft auf localhost und speichert nicht dauerhaft */
 const imTestfenster = ['localhost', '127.0.0.1'].includes(location.hostname);
 
@@ -688,6 +762,8 @@ function render() {
     + `<button class="fab" data-a="fab" aria-label="Eintrag hinzufügen">${icon('plus', 28)}</button>`;
   const inhalt = ({ heute: viewHeute, verlauf: viewVerlauf, mehr: viewMehr, ziele: viewZiele, makroziele: viewMakroziele, zeiten: viewZeiten, sicherung: viewSicherung }[S.tab] || viewHeute)();
   const fehler = (speicherFehler ? '<div class="hinweis warn">Speichern im Browser ist fehlgeschlagen. Bitte unter Mehr → Datensicherung eine Sicherung herunterladen.</div>' : '')
+    + (dateiStatus === 'getrennt' ? '<div class="hinweis"><span>Deine Speicherdatei ist eingerichtet. Ein Klick verbindet sie wieder, dein Browser fragt einmal nach.</span><button class="knopf" data-a="dateiVerbinden">Verbinden</button></div>' : '')
+    + (dateiMoeglich && dateiStatus === 'aus' && !hatDaten(D) && !imTestfenster ? '<div class="hinweis"><span>In diesem Browser sind keine Daten. Hast du eine Speicherdatei? Dann hol deine Daten mit einem Klick zurück.</span><button class="knopf" data-a="dateiOeffnen">Öffnen</button></div>' : '')
     + (imTestfenster ? '<div class="hinweis warn testfenster">Achtung: Das ist Claudes Vorschaufenster. Hier wird nichts dauerhaft gespeichert. Öffne die App über die Desktop-Verknüpfung „Kalorien-Tracker“ (platinwolf181.github.io/kalorien-tracker).</div>' : '');
   $('app').innerHTML = fehler + inhalt;
   if (S.tab === 'verlauf' && S.fTab !== 'ueberblick') zeichneCharts();
@@ -1045,7 +1121,18 @@ function viewSicherung() {
   const eintraege = Object.values(D.tage).reduce((a, t) => a + (t.eintraege || []).length, 0);
   const zuletzt = D.gespeichertAm ? new Date(D.gespeichertAm) : null;
   const zeile = (t, w) => `<div class="zl" style="cursor:default"><span>${t}</span><b>${w}</b></div>`;
-  return `<section class="karte"><h2>In diesem Browser gespeichert</h2>
+  const dateiKarte = !dateiMoeglich
+    ? '<section class="karte"><h2>Speicherdatei</h2><p class="klein" style="margin:0">In diesem Browser nicht möglich (zum Beispiel am Handy). Nutze unten „Sicherung herunterladen“.</p></section>'
+    : `<section class="karte"><h2>Speicherdatei auf diesem PC</h2>
+      <p class="klein" style="margin-top:0">${dateiStatus === 'verbunden' ? '✓ Verbunden: <b>' + esc(dateiHandle.name) + '</b>. Jede Änderung wird automatisch in diese Datei geschrieben.'
+        : dateiStatus === 'getrennt' ? 'Eingerichtet (<b>' + esc(dateiHandle.name) + '</b>), aber gerade nicht verbunden.'
+        : 'Noch keine. Mit einer Speicherdatei landen alle Daten zusätzlich als Datei auf deiner Festplatte und bleiben erhalten, auch wenn der Browser seinen Speicher löscht.'}</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${dateiStatus === 'getrennt' ? '<button class="knopf" data-a="dateiVerbinden">Verbinden</button>' : ''}
+        ${dateiStatus !== 'verbunden' ? '<button class="knopf2" data-a="dateiAnlegen">Speicherdatei anlegen</button>' : ''}
+        <button class="knopf2" data-a="dateiOeffnen">${dateiStatus === 'aus' ? 'Vorhandene Datei öffnen' : 'Andere Datei öffnen'}</button>
+      </div></section>`;
+  return dateiKarte + `<section class="karte"><h2>In diesem Browser gespeichert</h2>
     ${zeile('Tage mit Einträgen', zahl(tage.length))}
     ${zeile('Einträge im Tagebuch', zahl(eintraege))}
     ${zeile('Meine Mahlzeiten', zahl(D.rezepte.length))}
@@ -1483,6 +1570,9 @@ const AKTION = {
     D.eigene = D.eigene.filter(x => x.name !== v); D.favoriten = D.favoriten.filter(n => n !== v);
     sichern(); P.eigen = null; P.lm = null; P.reiter = 'lm'; P.kat = 'Eigene'; zeichneDlg(); toast('Gelöscht');
   },
+  dateiAnlegen() { dateiAnlegen(); },
+  dateiOeffnen() { dateiOeffnen(); },
+  dateiVerbinden() { dateiVerbinden(); },
   zielStd() { oeffneZiel('std'); },
   tzNeu() { oeffneZiel('neu'); },
   tzEdit(v) { oeffneZiel(Number(v)); },
@@ -1720,6 +1810,7 @@ function vorlagenEinspielen() {
 }
 vorlagenEinspielen();
 zieleUebernehmen();
+dateiStart();
 render();
 </script>
 </body>
