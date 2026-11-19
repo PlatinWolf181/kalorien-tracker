@@ -508,6 +508,7 @@ const NAEHR = [
   ['mn', 'Mangan', 'mg', 3.5, 0, 'M'],
   ['se', 'Selen', 'µg', 70, 0, 'M'],
   ['o3', 'Omega-3 (EPA + DHA)', 'mg', 250, 0, 'O'],
+  ['kre', 'Kreatin', 'g', 3, 0, 'X'],
 ];
 const KATEGORIEN = [...new Set(GRUND.map(x => x.kat))];
 const MAHLZEITEN = [['fruehstueck', 'Frühstück'], ['mittag', 'Mittagessen'], ['abend', 'Abendessen'], ['snack', 'Snacks']];
@@ -793,7 +794,7 @@ function viewAnalyse(t, s, z) {
   const schwelle = soll ? soll * 0.002 : 0.05;
   const zeilen = t.eintraege.map(e => ({ e, w: wVon(e) })).filter(x => x.w >= schwelle).sort((a, b) => b.w - a.w);
   const ohneWerte = makro ? (S.analyse !== 'kcal' && t.eintraege.some(e => e.schnell)) : t.eintraege.some(e => !hatMikro(e));
-  const gruppen = [['V', 'Vitamine'], ['M', 'Mineralstoffe'], ['O', 'Omega-3'], ['S', 'Weitere']];
+  const gruppen = [['V', 'Vitamine'], ['M', 'Mineralstoffe'], ['O', 'Omega-3'], ['X', 'Sport'], ['S', 'Weitere']];
   let h = `<section class="karte"><h2>Tagesanalyse</h2>
     <div class="chips" style="margin-bottom:12px">${ARTEN.map(([f, n]) => `<button class="chip ${S.analyse === f ? 'an' : ''}" data-a="analyse" data-v="${f}">${n}</button>`).join('')}
       <select class="chip ${nx ? 'an' : ''}" id="anaMikro" aria-label="Vitamin oder Mineralstoff wählen">
@@ -815,7 +816,7 @@ function viewAnalyse(t, s, z) {
 function viewMikro(t) {
   if (!t.eintraege.length) return '';
   const { s, ohne } = mikroSumme(t.eintraege);
-  const gruppen = [['V', 'Vitamine'], ['M', 'Mineralstoffe'], ['O', 'Omega-3-Fettsäuren'], ['S', 'Ballaststoffe, Zucker & Co.']];
+  const gruppen = [['V', 'Vitamine'], ['M', 'Mineralstoffe'], ['O', 'Omega-3-Fettsäuren'], ['X', 'Sport'], ['S', 'Ballaststoffe, Zucker & Co.']];
   let h = '<section class="karte"><h2>Vitamine & Mineralstoffe</h2>';
   for (const [g, gt] of gruppen) {
     h += `<h3 class="mikro-g">${gt}</h3><div class="mikro-gitter">`;
@@ -1541,6 +1542,7 @@ function zeichneSupp() {
       <h3 class="mikro-g">Vitamine</h3><div class="gitter">${NAEHR.filter(x => x[5] === 'V').map(feld).join('')}</div>
       <h3 class="mikro-g">Mineralstoffe</h3><div class="gitter">${NAEHR.filter(x => x[5] === 'M').map(feld).join('')}</div>
       <h3 class="mikro-g">Omega-3</h3><div class="gitter">${NAEHR.filter(x => x[5] === 'O').map(feld).join('')}</div>
+      <h3 class="mikro-g">Sport</h3><div class="gitter">${NAEHR.filter(x => x[5] === 'X').map(feld).join('')}</div>
       <details style="margin-top:8px"><summary>Kalorien und Makros (meist 0)</summary><div class="gitter" style="margin-top:8px">
         <label class="feld"><span>kcal</span><input name="kcal" inputmode="decimal" value="${wert(d.makro.kcal)}"></label>
         <label class="feld"><span>Eiweiß (g)</span><input name="e" inputmode="decimal" value="${wert(d.makro.e)}"></label>
@@ -1872,6 +1874,7 @@ const VORLAGEN_SUPP = [
   { id: 'supp-msm', name: 'MSM 2000 mg + Vitamin C', einh: 'Tablette', menge: 4, mikro: { vc: 14 } },
   { id: 'supp-d3k2', name: 'ESN Vitamin D3 + K2 Daily', einh: 'Tablette', menge: 1, mikro: { vd: 25, vk: 45 } },
   { id: 'supp-omega3', name: 'Omega-3 1400 (Fischöl)', einh: 'Kapsel', menge: 1, mikro: { o3: 475 }, makro: { kcal: 13, f: 1.4 } },
+  { id: 'supp-kreatin', name: 'Kreatin (Monohydrat)', einh: 'g', menge: 7, mikro: { kre: 7 } },
 ];
 function suppAusVorlage(v) {
   const fk = 100 / v.menge, mk = { kcal: 0, e: 0, k: 0, f: 0, ...(v.makro || {}) }, mikro = {};
