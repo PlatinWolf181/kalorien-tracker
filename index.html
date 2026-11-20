@@ -45,6 +45,9 @@ nav button.fab { flex: none; width: 56px; height: 56px; margin-left: 8px; justif
 .karte { background: var(--flaeche); border-radius: 18px; padding: 16px; margin-top: 12px; }
 h2 { font-size: 17px; margin: 0 0 10px; }
 .klein { font-size: 14px; color: var(--ink2); }
+.kopf-rechts { display: flex; align-items: center; gap: 8px; flex: none; }
+.serie { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--flaeche2); color: var(--ink); font-weight: 700; font-size: 15px; }
+.serie.offen { opacity: .55; }
 .rund { width: 40px; height: 40px; border-radius: 50%; background: var(--flaeche2); font-size: 18px; font-weight: 700; flex: none; }
 .woche { display: flex; justify-content: space-between; margin-top: 10px; touch-action: pan-y; user-select: none; }
 .wt { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; font-size: 14px; color: var(--ink2); }
@@ -861,7 +864,8 @@ function render() {
   $('kopf').innerHTML = (titel ? `<div class="kopf-links">${zurueck ? `<button class="zurueck" data-a="tab" data-v="${zurueck}" aria-label="Zurück">←</button>` : ''}<h1 class="titel${zurueck ? ' klein-titel' : ''}">${titel}</h1></div>`
     : `<button class="titel" data-a="kalender" aria-label="Datum wählen">${titelDatum(S.datum)} <small>▾</small></button>
        <input type="date" id="dp" class="dp" max="${heute()}" value="${S.datum}" tabindex="-1" aria-hidden="true">`)
-    + '<button class="rund" data-a="thema" title="Hell / Dunkel" aria-label="Hell oder dunkel umschalten">◐</button>';
+    + '<div class="kopf-rechts">' + (S.tab === 'heute' ? (sr => sr.n ? `<button class="serie${sr.offen ? ' offen' : ''}" data-a="serie" aria-label="${sr.n} Tage in Folge erfasst">🔥 ${sr.n}</button>` : '')(serie()) : '')
+    + '<button class="rund" data-a="thema" title="Hell / Dunkel" aria-label="Hell oder dunkel umschalten">◐</button></div>';
   const aktiv = id => S.tab === id || (id === 'mehr' && !!UNTER[S.tab]);
   $('nav').innerHTML = TABS.map(([id, t, ic]) => `<button data-a="tab" data-v="${id}" class="${aktiv(id) ? 'an' : ''}">${icon(ic)}<span>${t}</span></button>`).join('')
     + `<button class="fab" data-a="fab" aria-label="Eintrag hinzufügen">${icon('plus', 28)}</button>`;
@@ -1019,6 +1023,16 @@ function tageBereich(n) { const ende = heute(); return Array.from({ length: n },
 function viewVerlauf() {
   const reiter = `<div class="ftabs">${[['ueberblick', 'Überblick'], ['kalorien', 'Kalorien'], ['gewicht', 'Gewicht']].map(([id, t]) => `<button class="${S.fTab === id ? 'an' : ''}" data-a="fTab" data-v="${id}">${t}</button>`).join('')}</div>`;
   return reiter + (S.fTab === 'ueberblick' ? viewUeberblick() : viewFortDetails());
+}
+const erfasst = k => !!(D.tage[k] && (D.tage[k].eintraege || []).length);
+/* Serie: zählt ab heute (oder ab gestern, solange heute noch nichts drin ist) rückwärts */
+function serie() {
+  const h0 = heute(), offen = !erfasst(h0);
+  let k = offen ? plusTage(h0, -1) : h0, n = 0;
+  while (erfasst(k)) { n++; k = plusTage(k, -1); }
+  let rekord = 0, lauf = 0, vor = null;
+  for (const t of Object.keys(D.tage).filter(x => x <= h0 && erfasst(x)).sort()) { lauf = vor && plusTage(vor, 1) === t ? lauf + 1 : 1; rekord = Math.max(rekord, lauf); vor = t; }
+  return { n, offen, rekord };
 }
 const gewichtsTage = () => Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
 function viewUeberblick() {
@@ -1764,6 +1778,11 @@ const AKTION = {
   wasser(v) { const t = tag(S.datum); t.wasser = Math.max(0, (t.wasser || 0) + Number(v)); sichern(); render(); },
   makroUm() { S.makroRest = !S.makroRest; render(); },
   analyse(v) { S.analyse = v; render(); },
+  serie() {
+    const sr = serie(), g = gewichtsTage(), tage = n => n === 1 ? '1 Tag' : n + ' Tage';
+    const diff = g.length > 1 ? D.tage[g[g.length - 1]].gewicht - D.tage[g[0]].gewicht : null;
+    toast(`🔥 ${tage(sr.n)} in Folge erfasst${sr.offen ? ', heute noch eintragen, sonst reißt die Serie' : ''} · Rekord ${tage(sr.rekord)}${diff != null ? ` · seit Start ${diff <= 0 ? '−' : '+'}${zahl(Math.abs(diff), 1)} kg` : ''}`);
+  },
   anaAuf(v) { S.anaAuf[v] = !S.anaAuf[v]; render(); },
   fab() { P = { sheet: true }; zeichneSchnellmenue(); if (!dlg.open) dlg.showModal(); },
   aufzeichnen() { S.tab = 'heute'; render(); oeffne(besteMahlzeit(), true); },
