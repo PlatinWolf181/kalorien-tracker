@@ -70,6 +70,13 @@ h2 { font-size: 17px; margin: 0 0 10px; }
 .ana-z { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
 .ana-z > span:last-child { white-space: nowrap; }
 .balken.duenn { height: 6px; }
+.ana-knopf { display: flex; width: 100%; text-align: left; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.ana-knopf .pfeil { display: inline-block; width: 1em; color: var(--ink2); transition: transform .15s; }
+.ana-knopf[aria-expanded="true"] .pfeil { transform: rotate(90deg); }
+.ana-teile { margin: 10px 0 0 6px; padding-left: 12px; border-left: 2px solid var(--linie); }
+.ana-teil { padding: 5px 0; font-size: 14px; }
+.ana-teil .ana-z { margin-bottom: 4px; }
+.balken.fein { height: 4px; }
 .mikro-g { font-size: 14px; color: var(--ink2); margin: 14px 0 2px; text-transform: uppercase; letter-spacing: .04em; }
 .mikro-gitter { display: grid; grid-template-columns: 1fr; gap: 0 22px; }
 @media (min-width: 480px) { .mikro-gitter { grid-template-columns: 1fr 1fr; } }
@@ -738,7 +745,7 @@ function zieleUebernehmen() {
 }
 
 /* ---------- Oberfläche ---------- */
-const S = { tab: 'heute', datum: heute(), bereich: 30, analyse: 'e', fTab: 'ueberblick' };
+const S = { tab: 'heute', datum: heute(), bereich: 30, analyse: 'e', fTab: 'ueberblick', anaAuf: {} };
 const TABS = [['heute', 'Heute', 'home'], ['verlauf', 'Fortschritt', 'chart'], ['mehr', 'Mehr', 'mehr']];
 /* Unterseiten und wohin „zurück“ führt */
 const UNTER = { ziele: 'mehr', makroziele: 'ziele', zeiten: 'mehr', sicherung: 'mehr' };
@@ -810,11 +817,25 @@ function viewAnalyse(t, s, z) {
         ${gruppen.map(([g, gt]) => `<optgroup label="${gt}">${NAEHR.filter(x => x[5] === g).map(x => `<option value="${x[0]}" ${S.analyse === x[0] ? 'selected' : ''}>${x[1]}</option>`).join('')}</optgroup>`).join('')}
       </select></div>
     <div style="margin-bottom:10px"><b>${fmtN(gesamt)} ${einh}</b> <span class="klein">${titel} heute erfasst${soll ? ` · ${zahl(Math.round(gesamt / soll * 100))} % ${limit ? `vom Tageslimit (≤ ${fmtN(soll)} ${einh})` : makro ? 'vom Ziel' : 'vom Tagesbedarf'}` : ''}</span></div>`;
+  const farbe = FARBE[S.analyse] || 'var(--akzent)';
+  /* Wert einer Zutat innerhalb des Eintrags (null = keine Vitamin-Daten) */
+  const teilWert = (e, t) => { if (makro) return t[S.analyse] * t.g / 100 * e.faktor; const m = mikroVonLM(t); return m ? (m[S.analyse] || 0) * t.g / 100 * e.faktor : null; };
   for (const { e, w } of zeilen) {
-    const anteil = gesamt ? w / gesamt * 100 : 0;
-    h += `<div class="ana"><div class="ana-z"><span>${esc(e.name)}<br><span class="klein">${mahlzeit(e.m)}${e.schnell ? '' : ' · ' + eintragMenge(e)}</span></span>
-      <span><b>${fmtN(w)} ${einh}</b> <span class="klein">· ${zahl(Math.round(anteil))} %</span></span></div>
-      <div class="balken duenn"><i style="width:${anteil}%;background:${FARBE[S.analyse] || 'var(--akzent)'}"></i></div></div>`;
+    const anteil = gesamt ? w / gesamt * 100 : 0, auf = !!(e.teile && S.anaAuf[e.id]);
+    const kopf = `<span>${e.teile ? '<span class="pfeil" aria-hidden="true">▸</span>' : ''}${esc(e.name)}<br><span class="klein">${e.teile ? '<span class="pfeil"></span>' : ''}${mahlzeit(e.m)}${e.schnell ? '' : ' · ' + eintragMenge(e)}</span></span>
+      <span><b>${fmtN(w)} ${einh}</b> <span class="klein">· ${zahl(Math.round(anteil))} %</span></span>`;
+    h += `<div class="ana">${e.teile ? `<button class="ana-z ana-knopf" data-a="anaAuf" data-v="${e.id}" aria-expanded="${auf}">${kopf}</button>` : `<div class="ana-z">${kopf}</div>`}
+      <div class="balken duenn"><i style="width:${anteil}%;background:${farbe}"></i></div>`;
+    if (auf) {
+      const teile = e.teile.map(t => ({ t, v: teilWert(e, t) })).sort((a, b) => (b.v ?? -1) - (a.v ?? -1));
+      h += '<div class="ana-teile">' + teile.map(({ t, v }) => {
+        const ant = gesamt && v ? v / gesamt * 100 : 0;
+        return `<div class="ana-teil"><div class="ana-z"><span>${esc(t.name)} <span class="klein">· ${mengeText(t.g * e.faktor, t.einh || 'g')}</span></span>
+          <span>${v == null ? '<span class="klein">keine Daten</span>' : `<b>${fmtN(v)} ${einh}</b> <span class="klein">· ${zahl(Math.round(ant))} %</span>`}</span></div>
+          <div class="balken fein"><i style="width:${ant}%;background:${farbe}"></i></div></div>`;
+      }).join('') + '</div>';
+    }
+    h += '</div>';
   }
   if (!zeilen.length) h += `<p class="klein" style="margin:0">Keine Werte für ${titel} erfasst.</p>`;
   if (ohneWerte) h += `<p class="klein" style="margin:10px 0 0">${makro ? 'Einträge mit „Nur Kalorien" haben keine Nährwerte und fehlen hier.' : 'Schnelleinträge und eigene Lebensmittel haben keine Vitamin-Daten und fehlen hier.'}</p>`;
@@ -1653,6 +1674,7 @@ const AKTION = {
   wasser(v) { const t = tag(S.datum); t.wasser = Math.max(0, (t.wasser || 0) + Number(v)); sichern(); render(); },
   makroUm() { S.makroRest = !S.makroRest; render(); },
   analyse(v) { S.analyse = v; render(); },
+  anaAuf(v) { S.anaAuf[v] = !S.anaAuf[v]; render(); },
   fab() { P = { sheet: true }; zeichneSchnellmenue(); if (!dlg.open) dlg.showModal(); },
   aufzeichnen() { S.tab = 'heute'; render(); oeffne(besteMahlzeit(), true); },
   aufzeichnenCode() { S.tab = 'heute'; render(); oeffne(besteMahlzeit(), true); P.code = {}; zeichneDlg(); if (matchMedia('(hover:hover)').matches) $('eanFeld').focus(); },
