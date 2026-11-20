@@ -601,7 +601,7 @@ async function dateiStart() {
   if (!dateiHandle) { dateiStatus = 'aus'; render(); return; }
   let recht = 'prompt';
   try { recht = await dateiHandle.queryPermission({ mode: 'readwrite' }); } catch (e) { /* alte Browser */ }
-  if (recht === 'granted') { await dateiAbgleichen(); toast('✓ Speicherdatei verbunden'); } else dateiStatus = 'getrennt';
+  if (recht === 'granted') { await dateiAbgleichen(); autoZielPruefen(); toast('✓ Speicherdatei verbunden'); } else dateiStatus = 'getrennt';
   render();
 }
 async function dateiAnlegen() {
@@ -743,6 +743,83 @@ function zieleUebernehmen() {
   p.zieleV2 = true;
   sichern();
 }
+/* ---------- Kalorienziel automatisch nachziehen (Bedarf − Defizit, wöchentlich geprüft) ---------- */
+const AUTO_TAGE = 7, AUTO_MAX_SCHRITT = 150, KCAL_PRO_KG = 7700;
+const autoAn = () => !!(D.profil.autoZiel && D.profil.autoZiel.an);
+const autoDefizit = () => D.profil.autoDefizit != null ? D.profil.autoDefizit : 300;
+function schnittGewicht(bis, tage) {
+  const von = plusTage(bis, -(tage - 1));
+  const w = Object.keys(D.tage).filter(k => k >= von && k <= bis && D.tage[k].gewicht != null).map(k => D.tage[k].gewicht);
+  return w.length ? w.reduce((a, b) => a + b, 0) / w.length : null;
+}
+const tagKcal = t => (t.eintraege || []).reduce((a, e) => a + nw(e, 'kcal'), 0);
+/* Echter Verbrauch aus den letzten 4 Wochen: im Schnitt gegessen minus Gewichtstrend (1 kg ≈ 7.700 kcal) */
+function bedarfAusVerlauf() {
+  const h0 = heute(), von = plusTage(h0, -28), ess = [], pkt = [];
+  for (let k = von; k <= h0; k = plusTage(k, 1)) {
+    const t = D.tage[k]; if (!t) continue;
+    if (k < h0) { const kc = tagKcal(t); if (kc >= 1000) ess.push(kc); } /* halb erfasste Tage zählen nicht */
+    if (t.gewicht != null) pkt.push([Math.round((alsDatum(k) - alsDatum(von)) / 864e5), t.gewicht]);
+  }
+  if (ess.length < 14 || pkt.length < 4 || pkt[pkt.length - 1][0] - pkt[0][0] < 14) return null;
+  const mx = pkt.reduce((a, p) => a + p[0], 0) / pkt.length, my = pkt.reduce((a, p) => a + p[1], 0) / pkt.length;
+  const steigung = pkt.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0) / pkt.reduce((a, p) => a + (p[0] - mx) ** 2, 0); /* kg pro Tag */
+  const tdee = ess.reduce((a, b) => a + b, 0) / ess.length - steigung * KCAL_PRO_KG;
+  return tdee >= 1200 && tdee <= 6000 ? { tdee, essTage: ess.length, gewichte: pkt.length, proWoche: steigung * 7 } : null;
+}
+/* Geschätzter Verbrauch aus Körperdaten mit dem 7-Tage-Gewichtsschnitt */
+function bedarfAusDaten() {
+  const p = D.profil, kg = schnittGewicht(heute(), 7) || aktGewicht();
+  if (!(p.geschlecht && p.alter && p.groesse && kg)) return null;
+  return { tdee: (10 * kg + 6.25 * p.groesse - 5 * p.alter + (p.geschlecht === 'm' ? 5 : -161)) * p.aktivitaet, kg };
+}
+function autoVorschlag() {
+  const a = D.profil.autoZiel || {}, v = bedarfAusVerlauf(), d = v ? null : bedarfAusDaten();
+  if (!v && !d) return null;
+  let bedarf = v ? v.tdee : d.tdee;
+  if (a.bedarf) bedarf = Math.max(a.bedarf - AUTO_MAX_SCHRITT, Math.min(a.bedarf + AUTO_MAX_SCHRITT, bedarf)); /* Ausreißer dämpfen */
+  return { bedarf, kcal: Math.round((bedarf - autoDefizit()) / 10) * 10, quelle: v ? 'verlauf' : 'daten', v, d };
+}
+/* Neues kcal-Ziel: Eiweiß- und Fett-Gramm bleiben, die Kohlenhydrate gleichen aus */
+function prozMitGleichemEF(altKcal, proz, neuKcal) {
+  const r = v => Math.round(v * 100) / 100, e = altKcal * proz.e / neuKcal, f = altKcal * proz.f / neuKcal;
+  return e + f > 90 ? { ...proz } : { k: r(100 - e - f), e: r(e), f: r(f) };
+}
+function autoAnwenden(vs) {
+  const p = D.profil, a = p.autoZiel, alt = ziele(null, 'basis').kcal;
+  if (alt) {
+    p.zielProz = prozMitGleichemEF(alt, p.zielProz || STD_PROZ, vs.kcal);
+    const delta = vs.kcal - alt;
+    for (const t of p.tagesziele || []) { const n = Math.round((t.kcal + delta) / 10) * 10; t.proz = prozMitGleichemEF(t.kcal, t.proz, n); t.kcal = n; }
+    if (Math.abs(delta) >= 10) a.meldung = { alt, neu: vs.kcal, bedarf: Math.round(vs.bedarf / 10) * 10, quelle: vs.quelle };
+  }
+  p.zielKcal = vs.kcal; a.bedarf = vs.bedarf; a.letzte = heute();
+  sichern();
+}
+function autoZielPruefen() {
+  if (!autoAn()) return;
+  const a = D.profil.autoZiel;
+  if (a.letzte && plusTage(a.letzte, AUTO_TAGE) > heute()) return;
+  const vs = autoVorschlag(); if (vs) autoAnwenden(vs);
+}
+function autoKarte() {
+  const p = D.profil, a = p.autoZiel || {}, vs = autoVorschlag(), z = ziele(null, 'basis');
+  const zeile = (titel, wert, aktion, v) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>${titel}</span><b>${wert}</b></button>`;
+  const info = [];
+  if (!vs) info.push('Dafür braucht die App entweder Gewicht, Alter und Größe (oben) oder etwa 2 Wochen Verlauf: an 14 Tagen das Essen erfasst und mindestens 4 Gewichte über 2 Wochen verteilt.');
+  else {
+    info.push(`Geschätzter Bedarf: <b>${zahl(Math.round(vs.bedarf / 10) * 10)} kcal</b> ${vs.quelle === 'verlauf'
+      ? `aus deinem echten Verlauf der letzten 4 Wochen (${vs.v.essTage} Tage erfasst, ${vs.v.gewichte} Gewichte, Trend ${vs.v.proWoche <= 0 ? '−' : '+'}${zahl(Math.abs(vs.v.proWoche), 2)} kg pro Woche).`
+      : `aus deinen Körperdaten (${zahl(vs.d.kg, 1)} kg im 7-Tage-Schnitt). Sobald etwa 2 Wochen Essen und Gewicht erfasst sind, rechnet die App mit deinem echten Verlauf, das ist genauer.`}`);
+    info.push(a.an ? `Aktuelles Ziel ${zahl(z.kcal)} kcal · angepasst am ${kurzDatum(a.letzte)} · nächste Prüfung am ${kurzDatum(plusTage(a.letzte, AUTO_TAGE))}`
+      : `Eingeschaltet wäre dein Ziel <b>${zahl(vs.kcal)} kcal</b> (jetzt ${z.kcal ? zahl(z.kcal) + ' kcal' : 'keins'}).`);
+  }
+  info.push('Einmal pro Woche prüft die App: Bedarf minus Defizit. Eiweiß und Fett bleiben in Gramm gleich, nur die Kohlenhydrate passen sich an. Pro Woche ändert sich der Bedarf höchstens um 150 kcal.');
+  return `<section class="karte"><h2>Kalorienziel automatisch anpassen</h2>
+    ${zeile('Automatisch anpassen', a.an ? 'An' : 'Aus', 'autoUm', '')}
+    ${zeile('Defizit pro Tag', zahl(autoDefizit()) + ' kcal', 'feld', 'autoDefizit')}
+    <div class="klein" style="margin-top:10px">${info.map(t => `<div style="margin-top:4px">${t}</div>`).join('')}</div></section>`;
+}
 
 /* ---------- Oberfläche ---------- */
 const S = { tab: 'heute', datum: heute(), bereich: 30, analyse: 'e', fTab: 'ueberblick', anaAuf: {} };
@@ -792,6 +869,7 @@ function render() {
   const fehler = (speicherFehler ? '<div class="hinweis warn">Speichern im Browser ist fehlgeschlagen. Bitte unter Mehr → Datensicherung eine Sicherung herunterladen.</div>' : '')
     + (dateiStatus === 'getrennt' ? '<div class="hinweis"><span>Deine Speicherdatei ist eingerichtet. Ein Klick verbindet sie wieder, dein Browser fragt einmal nach.</span><button class="knopf" data-a="dateiVerbinden">Verbinden</button></div>' : '')
     + (dateiMoeglich && dateiStatus === 'aus' && !hatDaten(D) && !imTestfenster ? '<div class="hinweis"><span>In diesem Browser sind keine Daten. Hast du eine Speicherdatei? Dann hol deine Daten mit einem Klick zurück.</span><button class="knopf" data-a="dateiOeffnen">Öffnen</button></div>' : '')
+    + (autoAn() && D.profil.autoZiel.meldung ? (m => `<div class="hinweis"><span>Kalorienziel angepasst: <b>${zahl(m.alt)} → ${zahl(m.neu)} kcal</b>. Dein Bedarf liegt jetzt bei etwa ${zahl(m.bedarf)} kcal (${m.quelle === 'verlauf' ? 'aus deinem Verlauf' : 'aus deinen Körperdaten'}), minus ${zahl(autoDefizit())} kcal Defizit. Eiweiß und Fett bleiben gleich.</span><button class="knopf" data-a="autoOk">OK</button></div>`)(D.profil.autoZiel.meldung) : '')
     + (imTestfenster ? '<div class="hinweis warn testfenster">Achtung: Das ist Claudes Vorschaufenster. Hier wird nichts dauerhaft gespeichert. Öffne die App über die Desktop-Verknüpfung „Kalorien-Tracker“ (platinwolf181.github.io/kalorien-tracker).</div>' : '');
   $('app').innerHTML = fehler + inhalt;
   if (S.tab === 'verlauf' && S.fTab !== 'ueberblick') zeichneCharts();
@@ -1113,6 +1191,7 @@ const FELDER = {
   zielgewicht: { titel: 'Zielgewicht', einheit: 'kg', dez: true },
   wochenziel: { titel: 'Wochenziel', wahl: WOCHENZIELE },
   aktivitaet: { titel: 'Aktivitätsniveau', wahl: AKTIV },
+  autoDefizit: { titel: 'Defizit pro Tag', einheit: 'kcal' },
   wasserZiel: { titel: 'Wasser pro Tag', wahl: [[2000, '2 Liter'], [2500, '2,5 Liter'], [3000, '3 Liter'], [3500, '3,5 Liter'], [4000, '4 Liter']] },
 };
 function viewZiele() {
@@ -1137,6 +1216,7 @@ function viewZiele() {
     ${zeile('Ziele zu Kalorien, Kohlenhydraten, Eiweiß und Fetten', '›', 'tab', 'makroziele', 'Passe dein Standardziel oder Tagesziel an.')}
     ${zeile('Wasser pro Tag', zahl((p.wasserZiel || 3000) / 1000, 1) + ' l', 'feld', 'wasserZiel')}
   </section>
+  ${autoKarte()}
   <p class="klein">Der Bedarf ist eine Schätzung (Mifflin-St-Jeor × Aktivität). Bleibt das Gewicht über 2–3 Wochen anders als geplant, stell das Ziel nach.</p>`;
 }
 function viewMakroziele() {
@@ -1145,7 +1225,7 @@ function viewMakroziele() {
     + [['k', 'Kohlenhydrate'], ['e', 'Eiweiß'], ['f', 'Fette']].map(([m, n]) => `<button class="zl" data-a="${aktion}" data-v="${v}"><span>${punkt(m)}${n} <span class="klein">${kcal ? zahl(gramm(kcal, proz[m], m)) + ' g' : ''}</span></span><b>${zahl(proz[m], 1)} %</b></button>`).join('');
   const tz = p.tagesziele || [];
   return `<section class="karte"><h2>Standardziel</h2>
-    ${zeilen(z.kcal, z.proz, 'zielStd', '', p.zielKcal ? 'selbst festgelegt' : (b.kcal ? 'aus deinen Daten berechnet' : ''))}
+    ${zeilen(z.kcal, z.proz, 'zielStd', '', p.zielKcal ? (autoAn() ? 'automatisch angepasst' : 'selbst festgelegt') : (b.kcal ? 'aus deinen Daten berechnet' : ''))}
     <div id="zielAus" class="klein" style="margin-top:10px">${zielAusgabe()}</div></section>
   <section class="karte"><h2>Tagesziele setzen</h2>
     <p class="klein" style="margin:0 0 4px">Eigene Ziele für bestimmte Wochentage, zum Beispiel für deine Trainingstage. An allen anderen Tagen gilt das Standardziel.</p>
@@ -1594,7 +1674,7 @@ function zeichneEigen() {
 function oeffneFeld(key) { P = { feld: key }; zeichneFeldDlg(); if (!dlg.open) dlg.showModal(); }
 function zeichneFeldDlg() {
   const key = P.feld, d = FELDER[key], p = D.profil;
-  const aktuell = key === 'wochenziel' ? wochenzielVon(p) : p[key];
+  const aktuell = key === 'wochenziel' ? wochenzielVon(p) : key === 'autoDefizit' ? autoDefizit() : p[key];
   dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf"><h2>${d.titel}</h2><button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
     ${d.wahl ? `<div class="liste" style="min-height:0">${d.wahl.map(([v, t, u]) => `<button class="zl" data-a="feldWahl" data-v="${v}"><span>${t}${u ? `<br><span class="klein">${esc(u)}</span>` : ''}</span><b>${String(aktuell) === String(v) ? '✓' : ''}</b></button>`).join('')}</div>`
       : `<label class="feld" style="margin:0"><span>${d.titel} in ${d.einheit}</span><input id="feldWert" inputmode="${d.dez ? 'decimal' : 'numeric'}" value="${aktuell != null ? zahl(aktuell, 1) : ''}"></label>
@@ -1604,6 +1684,7 @@ function zeichneFeldDlg() {
 function feldSetzen(key, v) {
   const p = D.profil;
   if (key === 'wochenziel') { p.wochenziel = v; p.strategie = Math.round(v * 7700 / 7 / 10) * 10; } else p[key] = v;
+  if (key === 'autoDefizit' && autoAn()) { const vs = autoVorschlag(); if (vs) autoAnwenden(vs); }
   sichern(); dlg.close(); render(); toast('✓ Gespeichert');
 }
 function besteMahlzeit() {
@@ -1663,6 +1744,15 @@ const AKTION = {
   dateiOeffnen() { dateiOeffnen(); },
   dateiVerbinden() { dateiVerbinden(); },
   zielStd() { oeffneZiel('std'); },
+  autoUm() {
+    const p = D.profil; p.autoZiel = p.autoZiel || {};
+    if (p.autoZiel.an) { p.autoZiel.an = false; delete p.autoZiel.meldung; sichern(); render(); toast('Automatik aus, dein Ziel bleibt so'); return; }
+    p.autoZiel.an = true; delete p.autoZiel.bedarf;
+    const vs = autoVorschlag();
+    if (vs) { autoAnwenden(vs); toast('✓ Automatik an: ' + zahl(vs.kcal) + ' kcal'); } else { sichern(); toast('Automatik an, es fehlen noch Daten'); }
+    render();
+  },
+  autoOk() { delete D.profil.autoZiel.meldung; sichern(); render(); },
   tzNeu() { oeffneZiel('neu'); },
   tzEdit(v) { oeffneZiel(Number(v)); },
   zdTag(v) { const n = Number(v), t = P.zd.tage; P.zd.tage = t.includes(n) ? t.filter(x => x !== n) : [...t, n]; zeichneZielDlg(); },
@@ -1947,6 +2037,7 @@ function vorlagenEinspielen() {
 }
 vorlagenEinspielen();
 zieleUebernehmen();
+autoZielPruefen();
 dateiStart();
 render();
 </script>
