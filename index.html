@@ -204,6 +204,12 @@ dialog::backdrop { background: rgba(0, 0, 0, .5); }
 .vorschau { text-align: center; background: var(--flaeche2); border-radius: 10px; padding: 12px 10px; }
 .vorschau .vgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .vorschau .ringw { margin: 0 auto 5px; }
+#vsN:empty { display: none; }
+.auff { background: var(--flaeche2); border-radius: 10px; padding: 8px 12px 4px; text-align: left; }
+.auff-titel { font-size: 13px; color: var(--ink2); text-transform: uppercase; letter-spacing: .04em; margin: 2px 0; }
+.auff-alle { background: none; border: 0; color: var(--akzent); font: inherit; font-size: 14px; padding: 6px 0; cursor: pointer; }
+details.extra { margin: 0 0 12px; }
+details.extra summary { cursor: pointer; color: var(--akzent); font-size: 15px; padding: 2px 0 10px; }
 .chip.g-an { background: var(--akzent); color: var(--akzent-ink); }
 .dlg.voll { height: 90dvh; }
 .titel-sel { background: none; border: 0; color: var(--akzent); font-size: 19px; font-weight: 700; width: auto; max-width: 70%; padding: 4px 8px; text-align: center; cursor: pointer; }
@@ -664,10 +670,14 @@ const nw = (e, feld) => e.teile ? e.faktor * e.teile.reduce((a, t) => a + t[feld
 const fmtN = v => zahl(v, v < 1 ? 2 : v < 10 ? 1 : 0);
 /* Hat der Eintrag Vitamin-Daten? Bei Rezepten: mindestens ein Teil */
 const mikroVonLM = x => x.mikro || MIKRO[x.name];
+/* Eigene Nahrungsmittel kennen von der Packung nur Zucker, Salz & Co. (mikro.teil = 1), Vitamine fehlen dort */
+const PACKUNG_N = ['zuk', 'gesf', 'bal', 'salz'];
+const kenntN = (x, k) => { const m = mikroVonLM(x); return !!m && (!m.teil || m[k] != null); };
+const kennt = (e, k) => !e.schnell && (e.teile ? e.teile.some(t => kenntN(t, k)) : kenntN(e, k));
 const hatMikro = e => !e.schnell && (e.teile ? e.teile.some(t => mikroVonLM(t)) : !!mikroVonLM(e));
 /* Menge des Nährstoffs k im Eintrag (null = keine Daten) */
 function mikroWert(e, k) {
-  if (!hatMikro(e)) return null;
+  if (!kennt(e, k)) return null;
   if (e.teile) { let v = 0; for (const t of e.teile) { const m = mikroVonLM(t); if (m && m[k]) v += m[k] * t.g / 100; } return v * e.faktor; }
   return (mikroVonLM(e)[k] || 0) * e.g / 100;
 }
@@ -675,6 +685,7 @@ function mikroSumme(liste) {
   const s = {}; let ohne = 0;
   for (const e of liste) {
     if (!hatMikro(e)) { ohne++; continue; }
+    if (!e.teile && mikroVonLM(e).teil) ohne++; /* nur Packungsangaben: Vitamine fehlen */
     for (const [k] of NAEHR) { const v = mikroWert(e, k); if (v) s[k] = (s[k] || 0) + v; }
   }
   return { s, ohne };
@@ -915,7 +926,7 @@ function viewAnalyse(t, s, z) {
   const mahlzeit = id => MAHLZEITEN.find(m => m[0] === id)[1];
   const schwelle = soll ? soll * 0.002 : 0.05;
   const zeilen = t.eintraege.map(e => ({ e, w: wVon(e) })).filter(x => x.w >= schwelle).sort((a, b) => b.w - a.w);
-  const ohneWerte = makro ? (S.analyse !== 'kcal' && t.eintraege.some(e => e.schnell)) : t.eintraege.some(e => !hatMikro(e));
+  const ohneWerte = makro ? (S.analyse !== 'kcal' && t.eintraege.some(e => e.schnell)) : t.eintraege.some(e => !kennt(e, S.analyse));
   const gruppen = [['V', 'Vitamine'], ['M', 'Mineralstoffe'], ['O', 'Omega-3'], ['X', 'Sport'], ['S', 'Weitere']];
   let h = `<section class="karte"><h2>Tagesanalyse</h2>
     <div class="chips" style="margin-bottom:12px">${ARTEN.map(([f, n]) => `<button class="chip ${S.analyse === f ? 'an' : ''}" data-a="analyse" data-v="${f}">${n}</button>`).join('')}
@@ -926,7 +937,7 @@ function viewAnalyse(t, s, z) {
     <div style="margin-bottom:10px"><b>${fmtN(gesamt)} ${einh}</b> <span class="klein">${titel} heute erfasst${soll ? ` · ${zahl(Math.round(gesamt / soll * 100))} % ${limit ? `vom Tageslimit (≤ ${fmtN(soll)} ${einh})` : makro ? 'vom Ziel' : 'vom Tagesbedarf'}` : ''}</span></div>`;
   const farbe = FARBE[S.analyse] || 'var(--akzent)';
   /* Wert einer Zutat innerhalb des Eintrags (null = keine Vitamin-Daten) */
-  const teilWert = (e, t) => { if (makro) return t[S.analyse] * t.g / 100 * e.faktor; const m = mikroVonLM(t); return m ? (m[S.analyse] || 0) * t.g / 100 * e.faktor : null; };
+  const teilWert = (e, t) => { if (makro) return t[S.analyse] * t.g / 100 * e.faktor; return kenntN(t, S.analyse) ? (mikroVonLM(t)[S.analyse] || 0) * t.g / 100 * e.faktor : null; };
   for (const { e, w } of zeilen) {
     const anteil = gesamt ? w / gesamt * 100 : 0, auf = !!(e.teile && S.anaAuf[e.id]);
     const kopf = `<span>${e.teile ? '<span class="pfeil" aria-hidden="true">▸</span>' : ''}${esc(e.name)}<br><span class="klein">${e.teile ? '<span class="pfeil"></span>' : ''}${mahlzeit(e.m)}${e.schnell ? '' : ' · ' + eintragMenge(e)}</span></span>
@@ -945,7 +956,7 @@ function viewAnalyse(t, s, z) {
     h += '</div>';
   }
   if (!zeilen.length) h += `<p class="klein" style="margin:0">Keine Werte für ${titel} erfasst.</p>`;
-  if (ohneWerte) h += `<p class="klein" style="margin:10px 0 0">${makro ? 'Einträge mit „Nur Kalorien" haben keine Nährwerte und fehlen hier.' : 'Schnelleinträge und eigene Lebensmittel haben keine Vitamin-Daten und fehlen hier.'}</p>`;
+  if (ohneWerte) h += `<p class="klein" style="margin:10px 0 0">${makro ? 'Einträge mit „Nur Kalorien" haben keine Nährwerte und fehlen hier.' : (PACKUNG_N.includes(S.analyse) ? 'Schnelleinträge und eigene Lebensmittel ohne diese Angabe von der Packung fehlen hier.' : 'Schnelleinträge und eigene Lebensmittel haben keine Vitamin-Daten und fehlen hier.')}</p>`;
   return h + '</section>';
 }
 /* Tagesbilanz Vitamine & Mineralstoffe */
@@ -1457,6 +1468,7 @@ function zeichneMenge() {
     <h2>${esc(l.name)}</h2>
     <label class="feld" style="margin:0"><span>${MEHRZAHL[l.einh] ? 'Anzahl (' + MEHRZAHL[l.einh] + ')' : 'Menge in ' + l.einh}</span><input id="menge" inputmode="decimal" value="${zahl(P.g, 1)}"></label>
     <div class="vorschau" id="vs"></div>
+    <div id="vsN"></div>
     <div style="display:flex;gap:8px">${!P.edit && D.eigene.some(x => x.name === l.name) ? `<button class="knopf2" data-a="${istSupp(l) ? 'suppEdit' : 'eigenEdit'}" data-v="${esc(l.name)}">Bearbeiten</button>` : ''}<button class="knopf" data-a="eintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
   zeigeVorschau();
 }
@@ -1471,8 +1483,10 @@ function vorschauHtml(wVon, text) {
     + `<div class="vgrid">${teil('Kalorien', 'kcal', 'kcal', z.kcal)}${teil('Eiweiß', 'e', 'g', z.e)}${teil('KH', 'k', 'g', z.k)}${teil('Fett', 'f', 'g', z.f)}</div>`;
 }
 function zeigeVorschau() {
-  const l = P.lm, g = P.g || 0;
-  $('vs').innerHTML = istSupp(l) || (l.mikro && !l.kcal) ? mikroVorschau(l, g) : vorschauHtml(f => g * l[f] / 100);
+  const l = P.lm, g = P.g || 0, supp = istSupp(l) || (l.mikro && !l.mikro.teil && !l.kcal);
+  $('vs').innerHTML = supp ? mikroVorschau(l, g) : vorschauHtml(f => g * l[f] / 100);
+  $('vsN').innerHTML = supp || !(g > 0) ? '' : auffaelligHtml(k => kenntN(l, k) ? (mikroVonLM(l)[k] || 0) * g / 100 : null, zuckerNatur(l),
+    !P.edit && !mikroVonLM(l) && D.eigene.some(x => x.name === l.name) ? 'Zucker, Salz und Ballaststoffe kannst du unter „Bearbeiten“ von der Packung ergänzen.' : '');
   dlg.querySelectorAll('[data-a="menge"]').forEach(b => b.classList.toggle('g-an', Number(b.dataset.v) === g));
 }
 /* Supplements: Wirkstoffe der gewählten Menge mit Anteil am Tagesbedarf */
@@ -1499,6 +1513,7 @@ function zeichneRezMenge() {
     <label class="feld" style="margin:0"><span>${P.rezEinh === 'p' ? 'Anzahl Portionen' : 'Menge in g'}</span><input id="portionen" inputmode="decimal" value="${P.faktor > 0 ? (P.rezEinh === 'p' ? zahl(P.faktor * rezPort(r), 2) : zahl(P.faktor * rezG(r), 1)) : ''}"></label>
     <p class="klein" id="rezInfo" style="margin:0"></p>
     <div class="vorschau" id="vs"></div>
+    <div id="vsN"></div>
     <div style="display:flex;gap:8px">${rezNach(r.name) ? `<button class="knopf2" data-a="bauEdit" data-v="${esc(r.name)}">${P.edit ? 'Mahlzeit bearbeiten' : 'Bearbeiten'}</button>` : ''}<button class="knopf" data-a="rezEintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
   zeigeRezVorschau();
 }
@@ -1508,6 +1523,39 @@ function zeigeRezVorschau() {
   $('rezInfo').textContent = (port > 1 ? '1 Portion = ' + zahl(ges / port, 0) + ' g (die Mahlzeit ergibt ' + zahl(port, 1) + ' Portionen, zusammen ' + zahl(ges, 0) + ' g)' : '1 Portion = ganze Mahlzeit = ' + zahl(ges, 1) + ' g')
     + (f > 0 ? (P.rezEinh === 'p' ? ' · eingetragen: ' + zahl(f * ges, 0) + ' g' : ' · eingetragen: ' + portionText(f * port)) : '');
   $('vs').innerHTML = vorschauHtml(feld => rezWert(P.rez, feld) * f);
+  const pseudo = { teile: P.rez.teile, faktor: f };
+  $('vsN').innerHTML = f > 0 ? auffaelligHtml(k => mikroWert(pseudo, k), naturZuckerAnteil(P.rez.teile) >= 0.7) : '';
+}
+/* Zucker aus Obst, Gemüse und Milch zählt nicht zum Zuckerlimit (WHO: nur zugesetzter Zucker, Saft, Honig) */
+function zuckerNatur(x) {
+  const b = lmNach(x.name) || x;
+  return ['Obst', 'Gemüse'].includes(b.kat) || /^(voll)?milch\b|joghurt natur|skyr natur|magerquark|frischkäse/i.test(x.name);
+}
+function naturZuckerAnteil(teile) {
+  let alle = 0, natur = 0;
+  for (const t of teile) { if (!kenntN(t, 'zuk')) continue; const z = (mikroVonLM(t).zuk || 0) * t.g; alle += z; if (zuckerNatur(t)) natur += z; }
+  return alle ? natur / alle : 0;
+}
+/* Was in dieser Menge auffällt: viel Zucker, Salz oder gesättigte Fette (ab 15 % vom Tageslimit) oder
+   viel Vitamine, Mineralstoffe, Ballaststoffe (ab 20 % vom Tagesbedarf). wVon(k) = Menge, null = keine Daten */
+function auffaelligHtml(wVon, natur, hinweis) {
+  const da = NAEHR.filter(n => n[5] !== 'X').map(([k, name, einh, ziel, max]) => ({ k, name, einh, ziel, max, v: wVon(k) })).filter(x => x.v != null);
+  if (!da.length) return hinweis ? `<p class="klein" style="margin:0">${hinweis}</p>` : '';
+  for (const x of da) { x.a = x.v / x.ziel; x.natur = !!natur && x.k === 'zuk'; }
+  const viel = da.filter(x => x.max && x.a >= 0.15).sort((a, b) => b.a - a.a);
+  const gut = da.filter(x => !x.max && x.a >= 0.2).sort((a, b) => b.a - a.a).slice(0, 3);
+  const zeile = x => {
+    const pz = Math.round(x.a * 100), farbe = x.natur ? 'var(--ink2)' : x.max ? 'var(--warn)' : 'var(--c-kcal)';
+    return `<div class="mikro"><div class="mz"><span>${x.name}${x.natur ? ' <span class="klein">(natürlich)</span>' : ''}</span><span class="klein"><b style="color:var(--ink)">${fmtN(x.v)} ${x.einh}</b> · ${zahl(pz)} % ${x.max ? 'vom Tageslimit' : 'vom Tagesbedarf'}</span></div>
+      <div class="balken duenn"><i style="width:${Math.min(100, pz)}%;background:${farbe}"></i></div></div>`;
+  };
+  const oben = [...viel, ...gut], uebrig = da.filter(x => !oben.includes(x)), rest = uebrig.filter(x => x.a >= 0.01), nurPackung = da.every(x => PACKUNG_N.includes(x.k));
+  let h = `<div class="auff"><div class="auff-titel">${oben.length ? 'Auffällig in dieser Menge' : 'Nichts Auffälliges in dieser Menge'}</div>${oben.map(zeile).join('')}`;
+  if (uebrig.length || nurPackung) {
+    h += `<button type="button" class="auff-alle" data-a="alleN" aria-expanded="${!!S.alleN}">${S.alleN ? 'Weniger anzeigen ▴' : (oben.length ? 'Alle weiteren Nährstoffe ▾' : 'Alle Nährstoffe ▾')}</button>`;
+    if (S.alleN) h += rest.map(zeile).join('') + (uebrig.length > rest.length ? `<p class="klein" style="margin:4px 0 6px">${rest.length ? 'Alles andere' : 'Alle weiteren'} unter 1 % vom Tagesbedarf.</p>` : '') + (nurPackung ? '<p class="klein" style="margin:4px 0 6px">Vitamine und Mineralstoffe sind hierfür nicht hinterlegt, nur die Angaben von der Packung.</p>' : '');
+  }
+  return h + '</div>';
 }
 function rezEintragen() {
   const f = P.faktor;
@@ -1670,7 +1718,8 @@ async function eanSuche(roh) {
   const kcal = n['energy-kcal_100g'] != null ? n['energy-kcal_100g'] : (n['energy_100g'] != null ? n['energy_100g'] / 4.184 : null);
   const marke = (p.brands || '').split(',')[0].trim(), titel = (p.product_name_de || p.product_name || '').trim();
   const name = ((marke && !titel.toLowerCase().includes(marke.toLowerCase()) ? marke + ' ' : '') + titel).trim();
-  const v = { name, marke, kcal: w(kcal), e: w(n.proteins_100g), k: w(n.carbohydrates_100g), f: w(n.fat_100g) };
+  const v = { name, marke, kcal: w(kcal), e: w(n.proteins_100g), k: w(n.carbohydrates_100g), f: w(n.fat_100g),
+    zuk: w(n.sugars_100g), gesf: w(n['saturated-fat_100g']), bal: w(n.fiber_100g), salz: n.salt_100g == null || isNaN(Number(n.salt_100g)) ? null : Math.round(Number(n.salt_100g) * 100) / 100 };
   const fehlt = [v.kcal, v.e, v.k, v.f].some(x => x == null);
   erg().innerHTML = eanForm(code, v, 'Gefunden bei Open Food Facts. ' + (fehlt ? 'Einige Werte fehlen, bitte von der Packung ergänzen.' : 'Kurz mit der Packung vergleichen, dann speichern.'));
 }
@@ -1705,9 +1754,9 @@ function naehrwerteAusText(roh) {
   const zeilen = t.split(/\n/).map(z => z.trim()).filter(Boolean);
   const alsZahl = s => { s = s.replace(',', '.'); return parseFloat(s); };
   const zahlIn = s => { const m = s.replace(/(\d)\s+([.,])\s*(\d)/g, '$1$2$3').match(/(\d+(?:[.,]\d+)?)/); return m ? alsZahl(m[1]) : null; };
-  const finde = (re, nicht) => {
+  const finde = (re, nicht, kurz) => {
     for (let i = 0; i < zeilen.length; i++) {
-      const z = zeilen[i], m = z.match(re); if (!m || (nicht && nicht.test(z))) continue;
+      const z = zeilen[i], m = z.match(re); if (!m || (nicht && nicht.test(z)) || (kurz && z.length > kurz)) continue;
       let v = zahlIn(z.slice(m.index + m[0].length));
       if (v == null && zeilen[i + 1]) v = zahlIn(zeilen[i + 1]);
       if (v != null) return v;
@@ -1744,7 +1793,21 @@ function naehrwerteAusText(roh) {
     }
   }
   const r = v => v == null ? null : Math.round(v * 10) / 10;
-  return { kcal: w.kcal, f: r(w.f), k: r(w.k), e: r(w.e), korrigiert: !!w.korrigiert };
+  /* Weitere Angaben, nur aus kurzen Tabellenzeilen (nicht aus der Zutatenliste). Größer als möglich: ohne angehängte 9 oder mit verlorenem Komma probieren */
+  const passend = (v, max) => {
+    if (v == null) return null;
+    if (/\.\d9$/.test(String(v)) && v >= 1) v = parseFloat(String(v).slice(0, -1));
+    if (v <= max) return v;
+    const s = String(v), c = [];
+    if (s.endsWith('9') && s.length > 1) { c.push(parseFloat(s.slice(0, -1))); if (!s.includes('.')) c.push(parseFloat(s.slice(0, -1)) / 10); }
+    c.push(v / 10);
+    return c.find(x => x >= 0 && x <= max) ?? null;
+  };
+  const zuk = passend(finde(/zucker|sugar/, null, 45), w.k != null ? w.k : 100);
+  const gesf = passend(finde(/ges[aä]tt|saturat/, null, 50), w.f != null ? w.f : 100);
+  const bal = passend(finde(/ballast|fib(re|er)/, null, 45), 60);
+  const salzRoh = finde(/\bsalz\b|\bsalt\b/, null, 45), salz = salzRoh == null || salzRoh > 100 ? null : salzRoh;
+  return { kcal: w.kcal, f: r(w.f), k: r(w.k), e: r(w.e), zuk: r(zuk), gesf: r(gesf), bal: r(bal), salz: salz == null ? null : Math.round(salz * 100) / 100, korrigiert: !!w.korrigiert };
 }
 async function fotoAuslesen(datei) {
   const st = $('ocrStatus'), form = $('fEan'); if (!st || !form) return;
@@ -1762,6 +1825,9 @@ async function fotoAuslesen(datei) {
   if (w.kcal == null && w.e != null && w.k != null && w.f != null) w.kcal = Math.round(4 * w.e + 4 * w.k + 9 * w.f);
   const fehlt = [];
   for (const k of ['kcal', 'e', 'k', 'f']) { const el = $('fEan').querySelector(`[name=${k}]`); if (w[k] != null) el.value = zahl(w[k], 1); else fehlt.push(namen[k]); }
+  let extra = 0;
+  for (const k of PACKUNG_N) { const el = $('fEan').querySelector(`[name=x_${k}]`); if (el && w[k] != null) { el.value = zahl(w[k], 2); extra++; } }
+  if (extra) { const d = $('fEan').querySelector('details.extra'); if (d) d.open = true; }
   if (fehlt.length === 4) { melde('Ich konnte keine Nährwerte erkennen. Fotografier die Tabelle möglichst gerade, scharf und ohne Spiegelung, oder trag die Werte selbst ein.', true); return; }
   const rechn = (w.e || 0) * 4 + (w.k || 0) * 4 + (w.f || 0) * 9, passt = !w.kcal || fehlt.length || Math.abs(rechn - w.kcal) <= Math.max(25, w.kcal * 0.2);
   melde((fehlt.length ? `Nicht erkannt: ${fehlt.join(', ')}. Bitte selbst eintragen. ` : '✓ Werte eingetragen. ')
@@ -1773,6 +1839,7 @@ async function fotoAuslesen(datei) {
 function eanForm(code, v, text, gespeichert) {
   v = v || {};
   const wert = x => x == null ? '' : zahl(x, 1);
+  const ex = k => v[k] != null ? v[k] : v.mikro && v.mikro.teil && v.mikro[k] != null ? v.mikro[k] : null;
   return `<form id="fEan" data-ean="${code}" ${gespeichert ? `data-alt="${esc(v.name)}"` : ''} style="margin-top:14px">
     <p class="klein" style="margin-top:0">${esc(text)}</p>
     <div style="margin-bottom:12px"><button type="button" class="knopf2" data-a="ocrFoto" style="width:100%">📷 Foto der Nährwerttabelle auslesen</button>
@@ -1786,6 +1853,8 @@ function eanForm(code, v, text, gespeichert) {
       <label class="feld"><span>Kohlenhydrate (g)</span><input name="k" inputmode="decimal" value="${wert(v.k)}"></label>
       <label class="feld"><span>Fett (g)</span><input name="f" inputmode="decimal" value="${wert(v.f)}"></label>
     </div>
+    <details class="extra" ${PACKUNG_N.some(k => ex(k) != null) ? 'open' : ''}><summary>Zucker, Salz &amp; mehr <span class="klein">(optional)</span></summary>
+      <div class="gitter">${[['zuk', 'davon Zucker'], ['gesf', 'Gesättigte Fette'], ['bal', 'Ballaststoffe'], ['salz', 'Salz']].map(([k, t]) => `<label class="feld"><span>${t} (g)</span><input name="x_${k}" inputmode="decimal" value="${ex(k) == null ? '' : zahl(ex(k), 2)}"></label>`).join('')}</div></details>
     <p class="warn" id="fEanFehler" hidden></p>
     <button class="knopf" style="width:100%">Speichern und Menge eingeben</button></form>`;
 }
@@ -1981,6 +2050,7 @@ const AKTION = {
   wasser(v) { const t = tag(S.datum); t.wasser = Math.max(0, (t.wasser || 0) + Number(v)); sichern(); render(); },
   makroUm() { S.makroRest = !S.makroRest; render(); },
   analyse(v) { S.analyse = v; render(); },
+  alleN() { S.alleN = !S.alleN; if ($('portionen')) zeigeRezVorschau(); else zeigeVorschau(); },
   ocrFoto() { const f = $('ocrDatei'); if (f) { f.value = ''; f.click(); } },
   serie() {
     const sr = serie(), g = gewichtsTage(), tage = n => n === 1 ? '1 Tag' : n + ' Tage';
@@ -2070,7 +2140,7 @@ const AKTION = {
     const e = lies(S.datum).eintraege.find(x => x.id === v); if (!e) return;
     if (e.teile) { P = { m: e.m, edit: e.id, rez: { name: e.name, teile: e.teile, portionen: e.portionen }, faktor: e.faktor, rezEinh: D.rezEinh || 'p' }; zeichneRezMenge(); dlg.showModal(); return; }
     const basis = lmNach(e.name);
-    P = { m: e.m, suche: '', kat: null, edit: e.id, g: e.g, schnell: false, lm: { name: e.name, kcal: e.kcal, e: e.e, k: e.k, f: e.f, einh: e.einh, pn: basis ? basis.pn : null, pg: basis ? basis.pg : null, mikro: e.mikro, kat: basis ? basis.kat : (e.mikro ? 'Supplement' : null) } };
+    P = { m: e.m, suche: '', kat: null, edit: e.id, g: e.g, schnell: false, lm: { name: e.name, kcal: e.kcal, e: e.e, k: e.k, f: e.f, einh: e.einh, pn: basis ? basis.pn : null, pg: basis ? basis.pg : null, mikro: e.mikro, kat: basis ? basis.kat : (e.mikro && !e.mikro.teil ? 'Supplement' : null) } };
     zeichneDlg(); dlg.showModal();
   },
   loeschen(v) { const t = tag(S.datum); t.eintraege = t.eintraege.filter(x => x.id !== v); sichern(); render(); },
@@ -2176,6 +2246,10 @@ document.addEventListener('submit', ev => {
     if (name !== alt && (lmNach(name) || rezNach(name))) return zeige('Diesen Namen gibt es schon. Häng z. B. die Sorte an.');
     const neu = L(name, 'Eigene', kcal, wert('e') || 0, wert('k') || 0, wert('f') || 0); if (ean) neu.ean = ean;
     const marke = (f.get('marke') || '').trim(); if (marke) neu.marke = marke;
+    const ex = {}; for (const k of PACKUNG_N) { const x = wert('x_' + k); if (x != null && x >= 0) ex[k] = x; }
+    if (ex.zuk > neu.k + 0.5) return zeige('Zucker kann nicht mehr sein als die Kohlenhydrate. Bitte die Werte prüfen.');
+    if (ex.gesf > neu.f + 0.5) return zeige('Gesättigte Fette können nicht mehr sein als das Fett insgesamt. Bitte die Werte prüfen.');
+    if (Object.keys(ex).length) neu.mikro = { ...ex, teil: 1 };
     const i = alt ? D.eigene.findIndex(x => x.name === alt) : -1;
     if (i >= 0) D.eigene[i] = neu; else D.eigene.unshift(neu);
     sichern(); P.code = null; P.eigen = null; P.lm = neu; P.g = stdMenge(neu); zeichneDlg(); toast(alt ? '✓ Geändert' : '✓ Gespeichert');
