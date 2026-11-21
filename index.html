@@ -132,6 +132,8 @@ select.chip { -webkit-appearance: none; appearance: none; border: 0; width: auto
 .karte > .zl:first-child, .karte > h2 + .zl { border-top: 0; }
 .ftabs { display: flex; gap: 24px; border-bottom: 1px solid var(--linie); overflow-x: auto; scrollbar-width: none; }
 .ftabs button { padding: 10px 0; color: var(--ink2); font-weight: 600; font-size: 16px; border-bottom: 2px solid transparent; white-space: nowrap; }
+.wochen-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; text-align: center; }
+.wochen-nav .rund:disabled { opacity: .35; }
 .ftabs button.an { color: var(--ink); border-bottom-color: var(--ink); }
 .karte.ue { overflow: hidden; }
 .ue-kopf { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 12px; text-align: left; }
@@ -725,6 +727,11 @@ function berechnet() {
   const bmr = 10 * kg + 6.25 * p.groesse - 5 * p.alter + (p.geschlecht === 'm' ? 5 : -161), tdee = bmr * p.aktivitaet;
   return { kg, bmr, tdee, kcal: Math.round((tdee + p.strategie) / 10) * 10 };
 }
+/* Training: [id, Name, MET]; verbrannt = (MET − 1) × kg × Stunden (der Ruheumsatz steckt schon im Bedarf) */
+const TRAININGS = [['kraft', 'Krafttraining', 5], ['laufen', 'Laufen', 9.8], ['rad', 'Radfahren', 7.5], ['gehen', 'Spazieren / Gehen', 3.5], ['schwimmen', 'Schwimmen', 7], ['sonst', 'Sonstiges', 5]];
+const trainingName = art => (TRAININGS.find(x => x[0] === art) || [0, 'Training'])[1];
+const trainingKcalTag = k => (lies(k).training || []).reduce((a, t) => a + (t.kcal || 0), 0);
+const schaetzeKcal = (art, min) => { const met = (TRAININGS.find(x => x[0] === art) || [0, 0, 5])[2], kg = aktGewicht() || 80; return Math.max(0, Math.round((met - 1) * kg * (min || 0) / 60 / 5) * 5); };
 const tagesZielFuer = datum => (D.profil.tagesziele || []).find(t => t.tage.includes(alsDatum(datum).getDay())) || null;
 /* Ziel für ein Datum; modus 'basis' = Standardziel ohne Tagesziele */
 function ziele(datum, modus) {
@@ -732,7 +739,10 @@ function ziele(datum, modus) {
   const p = D.profil, b = berechnet();
   let kcal = p.zielKcal || b.kcal, proz = p.zielProz || STD_PROZ, tz = null;
   if (modus !== 'basis') { tz = tagesZielFuer(datum); if (tz) { kcal = tz.kcal; proz = tz.proz; } }
-  return { kcal, proz, tz, k: gramm(kcal, proz.k, 'k'), e: gramm(kcal, proz.e, 'e'), f: gramm(kcal, proz.f, 'f'), bmr: b.bmr, tdee: b.tdee, kg: b.kg, empfohlen: b.kcal };
+  const erg = { kcal, proz, tz, k: gramm(kcal, proz.k, 'k'), e: gramm(kcal, proz.e, 'e'), f: gramm(kcal, proz.f, 'f'), bmr: b.bmr, tdee: b.tdee, kg: b.kg, empfohlen: b.kcal, training: 0 };
+  /* Trainingskalorien obendrauf (nur wenn eingeschaltet): als Kohlenhydrate, Eiweiß und Fett bleiben */
+  if (modus !== 'basis' && kcal && p.trainingAnrechnen) { const tk = trainingKcalTag(datum); if (tk) { erg.kcal += tk; erg.k += Math.round(tk / 4); erg.training = tk; } }
+  return erg;
 }
 /* Alte Einstellungen (eigene Gramm, eigenes kcal-Ziel, Trainingstage mit Plus) einmalig übernehmen */
 function zieleUebernehmen() {
@@ -855,6 +865,7 @@ const ICON = {
   tropfen: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
   blitz: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   teller: '<path d="M3 11h18a9 9 0 0 1-18 0z"/><path d="M9 7c0-2 2-2 2-4M14 7c0-2 2-2 2-4"/>',
+  hantel: '<path d="M6 7v10M18 7v10M3 9.5v5M21 9.5v5M6 12h12"/>',
   kopie: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
 };
 const icon = (n, g = 24) => `<svg width="${g}" height="${g}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
@@ -1026,6 +1037,13 @@ function viewHeute() {
     <div class="mz-t"><b>Wasser</b><span class="klein">${liter(wasser)} von ${liter(wz)} Liter</span></div></div>
     <div class="balken" style="margin:12px 0"><i style="width:${Math.min(100, wasser / wz * 100)}%"></i></div>
     <div class="chips"><button class="chip" data-a="wasser" data-v="250">+ 250 ml</button><button class="chip" data-a="wasser" data-v="500">+ 500 ml</button><button class="chip" data-a="wasser" data-v="1000">+ 1 l</button><button class="chip" data-a="wasser" data-v="-250" ${wasser <= 0 ? 'disabled' : ''}>− 250 ml</button></div></section>`;
+  const tr = t.training || [], trK = tr.reduce((a, x) => a + (x.kcal || 0), 0);
+  const woMo = plusTage(S.datum, -((alsDatum(S.datum).getDay() + 6) % 7)), woche = Array.from({ length: 7 }, (_, i) => lies(plusTage(woMo, i)).training || []).flat();
+  h += `<section class="karte" id="trainingKarte"><div class="mahlzeit-kopf"><span class="mz-ic">${icon('hantel', 26)}</span>
+    <div class="mz-t"><b>Training</b><span class="klein">${tr.length ? zahl(trK) + ' kcal verbrannt' + (D.profil.trainingAnrechnen && z.kcal ? ' · zum Tagesziel addiert' : '') : 'Diese Woche: ' + (woche.length ? woche.length + ' × · ' + zahl(woche.reduce((a, x) => a + x.min, 0)) + ' min' : 'noch keins')}</span></div>
+    <button class="pille" data-a="trNeu" aria-label="Training eintragen">Eintragen</button></div>
+    ${tr.map(x => `<div class="eintrag"><button class="haupt" data-a="trEdit" data-v="${x.id}">${esc(trainingName(x.art))} <span class="klein" style="white-space:nowrap">· ${zahl(x.min)} min</span></button>
+      <span class="wert">${zahl(x.kcal || 0)} kcal</span><button class="weg" data-a="trWeg" data-v="${x.id}" aria-label="Training löschen">×</button></div>`).join('')}</section>`;
   h += viewAnalyse(t, s, z);
   h += viewMikro(t);
   h += `<section class="karte gewicht"><label for="kg">Gewicht an diesem Tag</label>
@@ -1035,8 +1053,40 @@ function viewHeute() {
 
 function tageBereich(n) { const ende = heute(); return Array.from({ length: n }, (_, i) => plusTage(ende, i - n + 1)); }
 function viewVerlauf() {
-  const reiter = `<div class="ftabs">${[['ueberblick', 'Überblick'], ['kalorien', 'Kalorien'], ['gewicht', 'Gewicht']].map(([id, t]) => `<button class="${S.fTab === id ? 'an' : ''}" data-a="fTab" data-v="${id}">${t}</button>`).join('')}</div>`;
-  return reiter + (S.fTab === 'ueberblick' ? viewUeberblick() : viewFortDetails());
+  const reiter = `<div class="ftabs">${[['ueberblick', 'Überblick'], ['kalorien', 'Kalorien'], ['gewicht', 'Gewicht'], ['naehrstoffe', 'Nährstoffe']].map(([id, t]) => `<button class="${S.fTab === id ? 'an' : ''}" data-a="fTab" data-v="${id}">${t}</button>`).join('')}</div>`;
+  return reiter + (S.fTab === 'ueberblick' ? viewUeberblick() : S.fTab === 'naehrstoffe' ? viewNaehrstoffe() : viewFortDetails());
+}
+/* Wochenansicht: Schnitt je erfasstem Tag gegen den Tagesbedarf, mit ‹ › zum Blättern */
+function viewNaehrstoffe() {
+  const off = S.nWoche || 0, mo = plusTage(plusTage(heute(), -((alsDatum(heute()).getDay() + 6) % 7)), off * 7);
+  const keys = Array.from({ length: 7 }, (_, i) => plusTage(mo, i)), so = keys[6];
+  const erf = keys.filter(k => k <= heute() && erfasst(k)), n = erf.length;
+  const titel = off === 0 ? 'Diese Woche' : off === -1 ? 'Letzte Woche' : kurzDatum(mo) + ' – ' + kurzDatum(so);
+  let h = `<div class="wochen-nav"><button class="rund" data-a="nWoche" data-v="-1" aria-label="Woche davor">‹</button>
+    <div><b>${titel}</b><br><span class="klein">${kurzDatum(mo)} – ${kurzDatum(so)}${alsDatum(so).getFullYear()} · ${n} von 7 Tagen erfasst</span></div>
+    <button class="rund" data-a="nWoche" data-v="1" aria-label="Woche danach" ${off >= 0 ? 'disabled' : ''}>›</button></div>`;
+  if (!n) return h + '<section class="karte"><p class="klein" style="margin:0">In dieser Woche ist noch nichts erfasst.</p></section>';
+  const sum = erf.map(k => summe(lies(k).eintraege)), zz = erf.map(k => ziele(k));
+  const avg = (arr, f) => arr.reduce((a, x) => a + (x[f] || 0), 0) / n;
+  h += `<section class="karte"><h2>Makros</h2><div class="klein" style="margin:-4px 0 12px">Schnitt je erfasstem Tag · ${zahl(Math.round(avg(sum, 'kcal')))} von ${zz[0].kcal ? zahl(Math.round(avg(zz, 'kcal'))) : '–'} kcal</div>
+    <div class="makros">${makro('Kohlenhydrate', avg(sum, 'k'), avg(zz, 'k'))}${makro('Fette', avg(sum, 'f'), avg(zz, 'f'))}${makro('Eiweiß', avg(sum, 'e'), avg(zz, 'e'))}</div></section>`;
+  const proTag = erf.map(k => mikroSumme(lies(k).eintraege)), ohne = proTag.reduce((a, x) => a + x.ohne, 0);
+  const gruppen = [['V', 'Vitamine'], ['M', 'Mineralstoffe'], ['O', 'Omega-3-Fettsäuren'], ['X', 'Sport'], ['S', 'Ballaststoffe, Zucker & Co.']];
+  const werte = NAEHR.map(([k, name, einh, ziel, max, g]) => { const vs = proTag.map(x => x.s[k] || 0), m = vs.reduce((a, b) => a + b, 0) / n; return { k, name, einh, ziel, max, g, m, pz: m / ziel * 100, tage: vs.filter(v => max ? v > ziel : v >= ziel).length }; });
+  const schwach = werte.filter(w => !w.max && w.g !== 'X').sort((a, b) => a.pz - b.pz).slice(0, 3).filter(w => w.pz < 100);
+  h += '<section class="karte"><h2>Vitamine & Mineralstoffe</h2>'
+    + (schwach.length ? `<p class="klein" style="margin:-4px 0 4px">Am wenigsten gedeckt: ${schwach.map(w => `<b>${esc(w.name)}</b> ${zahl(Math.round(w.pz))} %`).join(', ')}</p>` : '<p class="klein" style="margin:-4px 0 4px">Im Schnitt alles gedeckt. 👍</p>');
+  for (const [g, gt] of gruppen) {
+    h += `<h3 class="mikro-g">${gt}</h3><div class="mikro-gitter">`;
+    for (const w of werte.filter(x => x.g === g)) {
+      const drueber = w.max && w.m > w.ziel;
+      h += `<div class="mikro"><div class="mz"><span>${w.name}</span><span class="klein"><b style="color:${drueber ? 'var(--warn)' : 'var(--ink)'}">${fmtN(w.m)}</b> / ${w.max ? '≤ ' : ''}${fmtN(w.ziel)} ${w.einh}</span></div>
+        <div class="balken duenn"><i class="${drueber ? 'drueber' : ''}" style="width:${Math.min(100, w.pz)}%"></i></div>
+        <div class="klein" style="font-size:12px;margin-top:2px">${w.max ? (w.tage ? `an ${w.tage} von ${n} Tagen über dem Limit` : 'nie über dem Limit') : `an ${w.tage} von ${n} Tagen erreicht`}</div></div>`;
+    }
+    h += '</div>';
+  }
+  return h + `<p class="klein" style="margin:12px 0 0">Schnitt je erfasstem Tag. ${ohne ? `${ohne} ${ohne === 1 ? 'Eintrag' : 'Einträge'} ohne Vitamin-Daten (Schnelleinträge, eigene Lebensmittel) fehlen hier. ` : ''}Tagesbedarf: DGE-Richtwerte für Männer.</p></section>`;
 }
 const erfasst = k => !!(D.tage[k] && (D.tage[k].eintraege || []).length);
 /* Serie: zählt ab heute (oder ab gestern, solange heute noch nichts drin ist) rückwärts */
@@ -1074,7 +1124,10 @@ function viewUeberblick() {
     <button class="ue-fuss" data-a="gewichtEingeben"><span>Mein Gewicht eingeben</span><span>›</span></button></section>
   <section class="karte ue"><button class="ue-kopf" data-a="fTab" data-v="kalorien"><h2>Makros</h2><span class="pfeil">›</span></button>
     <div class="klein" style="margin:-4px 0 12px">Durchschnitt der letzten 7 erfassten Tage</div>
-    <div class="makros">${makro('Kohlenhydrate', avg('k'), z.k)}${makro('Fette', avg('f'), z.f)}${makro('Eiweiß', avg('e'), z.e)}</div></section>`;
+    <div class="makros">${makro('Kohlenhydrate', avg('k'), z.k)}${makro('Fette', avg('f'), z.f)}${makro('Eiweiß', avg('e'), z.e)}</div></section>
+  ${(tr => `<section class="karte ue"><div class="ue-kopf" style="cursor:default"><h2>Training</h2></div>
+    <div class="gew-werte"><div><span class="klein">Letzte 7 Tage</span><b>${tr.length} ×</b></div><div><span class="klein">Dauer</span><b>${zahl(tr.reduce((a, x) => a + x.min, 0))} min</b></div><div><span class="klein">Verbrannt</span><b>${zahl(tr.reduce((a, x) => a + (x.kcal || 0), 0))} kcal</b></div></div>
+    <button class="ue-fuss" data-a="trNeu"><span>Training eintragen</span><span>›</span></button></section>`)(tage7.flatMap(k => lies(k).training || []))}`;
 }
 function viewFortDetails() {
   const keys = tageBereich(S.bereich), z = ziele(heute(), 'basis');
@@ -1245,6 +1298,9 @@ function viewZiele() {
     ${zeile('Wasser pro Tag', zahl((p.wasserZiel || 3000) / 1000, 1) + ' l', 'feld', 'wasserZiel')}
   </section>
   ${autoKarte()}
+  <section class="karte"><h2>Training</h2>
+    ${zeile('Trainingskalorien zum Tagesziel addieren', D.profil.trainingAnrechnen ? 'An' : 'Aus', 'trAnrechnen', '')}
+    <p class="klein" style="margin:10px 0 0">Dein Aktivitätsniveau enthält dein Training schon. Schalte das nur ein, wenn du die Aktivität auf „Sitzend“ oder „Leicht“ stellst, sonst zählt dein Training doppelt. Die zusätzlichen Kalorien kommen als Kohlenhydrate dazu.</p></section>
   <p class="klein">Der Bedarf ist eine Schätzung (Mifflin-St-Jeor × Aktivität). Bleibt das Gewicht über 2–3 Wochen anders als geplant, stell das Ziel nach.</p>`;
 }
 function viewMakroziele() {
@@ -1839,6 +1895,24 @@ function besteMahlzeit() {
   }
   return beste;
 }
+function oeffneTraining(id) {
+  const alt = id ? (lies(S.datum).training || []).find(x => x.id === id) : null;
+  const art = alt ? alt.art : (D.trainingArt || 'kraft'), min = alt ? alt.min : (D.trainingMin || 60);
+  P = { training: { id: alt ? alt.id : null, art, min, kcal: alt ? alt.kcal : schaetzeKcal(art, min), hand: !!(alt && alt.hand) } };
+  zeichneTraining(); if (!dlg.open) dlg.showModal();
+}
+function zeichneTraining() {
+  const t = P.training;
+  dlg.innerHTML = `<div class="dlg"><div class="dlg-kopf"><h2>${t.id ? 'Training bearbeiten' : 'Training eintragen'}</h2><button class="weg" data-a="zu" aria-label="Schließen">×</button></div>
+    <div class="chips">${TRAININGS.map(([a, n]) => `<button class="chip ${t.art === a ? 'an' : ''}" data-a="trArt" data-v="${a}">${n}</button>`).join('')}</div>
+    <div class="gitter">
+      <label class="feld"><span>Dauer (min)</span><input id="trMin" inputmode="numeric" value="${t.min ? zahl(t.min) : ''}"></label>
+      <label class="feld"><span>Verbrannt (kcal)</span><input id="trKcal" inputmode="numeric" value="${t.kcal != null ? zahl(t.kcal) : ''}"></label>
+    </div>
+    <p class="klein" id="trInfo" style="margin:0">${t.hand ? 'Eigener Wert, zum Beispiel von deiner Uhr.' : `Geschätzt aus Dauer, Sportart und ${aktGewicht() ? zahl(aktGewicht(), 1) + ' kg' : '80 kg (trag dein Gewicht ein, dann wird es genauer)'}. Hast du einen Wert von deiner Uhr, trag ihn einfach ein.`}</p>
+    <p class="warn" id="trFehler" style="margin:0" hidden></p>
+    <div style="display:flex;gap:8px">${t.id ? '<button class="knopf2" data-a="trWeg" data-v="' + t.id + '">Löschen</button>' : ''}<button class="knopf" data-a="trSpeichern" style="flex:1">Speichern</button></div></div>`;
+}
 function zeichneSchnellmenue() {
   dlg.innerHTML = `<div class="dlg schnellmenue">
     <div class="kacheln2" style="margin-top:0">
@@ -1848,6 +1922,7 @@ function zeichneSchnellmenue() {
     <div class="menue-karte">
       <button class="menue" data-a="sheetWasser"><span class="mz-ic">${icon('tropfen', 24)}</span><span>Wasser</span></button>
       <button class="menue" data-a="sheetGewicht"><span class="mz-ic" style="color:var(--teal)">${icon('waage', 24)}</span><span>Gewicht</span></button>
+      <button class="menue" data-a="trNeu"><span class="mz-ic" style="color:var(--c-e)">${icon('hantel', 24)}</span><span>Training</span></button>
     </div></div>`;
 }
 function zeichneSchnell() {
@@ -1920,6 +1995,21 @@ const AKTION = {
   sheetGewicht() { dlg.close(); AKTION.gewichtEingeben(); },
   mehrMahlzeiten() { oeffne('fruehstueck'); P.reiter = 'mahlzeiten'; zeichneDlg(); },
   fTab(v) { S.fTab = v; render(); scrollTo(0, 0); },
+  nWoche(v) { S.nWoche = Math.min(0, (S.nWoche || 0) + Number(v)); render(); },
+  trNeu() { oeffneTraining(null); },
+  trEdit(v) { oeffneTraining(v); },
+  trArt(v) { P.training.art = v; if (!P.training.hand) P.training.kcal = schaetzeKcal(v, P.training.min); zeichneTraining(); },
+  trSpeichern() {
+    const t = P.training, fe = $('trFehler');
+    if (!(t.min > 0)) { fe.textContent = 'Bitte die Dauer in Minuten eingeben.'; fe.hidden = false; return; }
+    const tg = tag(S.datum), neu = { id: t.id || neueId(), art: t.art, min: t.min, kcal: Math.round(t.kcal || 0), ...(t.hand ? { hand: true } : {}) };
+    tg.training = tg.training || [];
+    const i = tg.training.findIndex(x => x.id === neu.id); if (i >= 0) tg.training[i] = neu; else tg.training.push(neu);
+    D.trainingArt = t.art; D.trainingMin = t.min;
+    sichern(); dlg.close(); render(); toast('✓ Training gespeichert');
+  },
+  trWeg(v) { const tg = tag(S.datum); tg.training = (tg.training || []).filter(x => x.id !== v); sichern(); if (dlg.open && P && P.training) dlg.close(); render(); toast('Gelöscht'); },
+  trAnrechnen() { D.profil.trainingAnrechnen = !D.profil.trainingAnrechnen; sichern(); render(); },
   feld(v) { oeffneFeld(v); },
   feldWahl(v) { const key = P.feld; feldSetzen(key, key === 'geschlecht' ? v : Number(v)); },
   feldSpeichern() {
@@ -2030,6 +2120,8 @@ document.addEventListener('input', ev => {
     $('zdKcal').value = Math.round(kc); zdSumme();
   }
   else if (t.id === 'portionen') { const v = num(t.value), ges = rezG(P.rez); P.faktor = !(v > 0) ? null : P.rezEinh === 'p' ? v / rezPort(P.rez) : ges > 0 ? v / ges : null; zeigeRezVorschau(); }
+  else if (t.id === 'trMin') { const v = num(t.value); P.training.min = v > 0 ? v : null; if (!P.training.hand) { P.training.kcal = schaetzeKcal(P.training.art, v); $('trKcal').value = zahl(P.training.kcal); } }
+  else if (t.id === 'trKcal') { const v = num(t.value); P.training.kcal = v != null && v >= 0 ? v : 0; P.training.hand = true; $('trInfo').textContent = 'Eigener Wert, zum Beispiel von deiner Uhr.'; }
   else if (t.id === 'bauName') { P.bau.name = t.value; P.bau.geaendert = true; }
   else if (t.id === 'bauPort') { const v = num(t.value); P.bau.portionen = v > 0 ? v : 1; P.bau.geaendert = true; zeigeBauSumme(); }
   else if (t.dataset.bt) { P.bau.teile[Number(t.dataset.bt)].g = num(t.value) || 0; P.bau.geaendert = true; zeigeBauSumme(); }
