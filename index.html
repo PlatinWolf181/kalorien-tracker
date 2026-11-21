@@ -208,6 +208,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .5); }
 .reiter { display: flex; border-bottom: 1px solid var(--linie); margin: 0 -16px; padding: 0 8px; }
 .reiter button { flex: 1; padding: 10px 4px; color: var(--ink2); font-weight: 600; font-size: 15px; border-bottom: 2px solid transparent; }
 .reiter button.an { color: var(--ink); border-bottom-color: var(--akzent); }
+.sortier { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin: 10px 0 2px; }
+.sortier select { width: auto; padding: 4px 8px; font-size: 14px; }
 .umsch { display: inline-flex; border: 1px solid var(--linie); border-radius: 999px; padding: 2px; gap: 2px; }
 .umsch button { padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; color: var(--ink2); }
 .umsch button.an { background: var(--akzent); color: #fff; }
@@ -700,8 +702,11 @@ function suppKurz(x, menge) {
   return teile.join(', ') || 'keine Angaben';
 }
 const rezG = r => r.teile.reduce((a, t) => a + t.g, 0);
+/* Wie viele Portionen ergibt die Mahlzeit? (1 = die ganze Mahlzeit ist eine Portion) */
+const rezPort = r => r && r.portionen > 1 ? r.portionen : 1;
 const portionText = f => zahl(f, 2) + (Math.abs(f - 1) < 1e-9 ? ' Portion' : ' Portionen');
-const eintragMenge = e => e.teile ? portionText(e.faktor) + ' · ' + zahl(e.faktor * rezG(e), 0) + ' g' : mengeText(e.g, e.einh);
+const markeText = x => x.marke && !norm(x.name).includes(norm(x.marke)) ? ' · ' + esc(x.marke) : '';
+const eintragMenge = e => e.teile ? portionText(e.faktor * rezPort(e)) + ' · ' + zahl(e.faktor * rezG(e), 0) + ' g' : mengeText(e.g, e.einh) + markeText(e);
 
 function aktGewicht() {
   const ks = Object.keys(D.tage).filter(k => D.tage[k].gewicht != null && k <= heute()).sort();
@@ -859,6 +864,14 @@ function titelDatum(k) {
   if (k === plusTage(heute(), -1)) return 'Gestern';
   return ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][alsDatum(k).getDay()] + ', ' + kurzDatum(k);
 }
+function sicherungFaellig() {
+  if (dateiStatus === 'verbunden' || !hatDaten(D)) return null;
+  if (D.sicherungSpaeter && D.sicherungSpaeter > heute()) return null;
+  const tage = Object.keys(D.tage).filter(k => (D.tage[k].eintraege || []).length).sort();
+  const seit = D.letzteSicherung || tage[0]; if (!seit) return null;
+  const n = Math.round((alsDatum(heute()) - alsDatum(seit)) / 864e5);
+  return n >= 7 ? { n, nie: !D.letzteSicherung } : null;
+}
 function render() {
   const titel = SEITENTITEL[S.tab], zurueck = UNTER[S.tab];
   $('kopf').innerHTML = (titel ? `<div class="kopf-links">${zurueck ? `<button class="zurueck" data-a="tab" data-v="${zurueck}" aria-label="Zurück">←</button>` : ''}<h1 class="titel${zurueck ? ' klein-titel' : ''}">${titel}</h1></div>`
@@ -874,6 +887,7 @@ function render() {
     + (dateiStatus === 'getrennt' ? '<div class="hinweis"><span>Deine Speicherdatei ist eingerichtet. Ein Klick verbindet sie wieder, dein Browser fragt einmal nach.</span><button class="knopf" data-a="dateiVerbinden">Verbinden</button></div>' : '')
     + (dateiMoeglich && dateiStatus === 'aus' && !hatDaten(D) && !imTestfenster ? '<div class="hinweis"><span>In diesem Browser sind keine Daten. Hast du eine Speicherdatei? Dann hol deine Daten mit einem Klick zurück.</span><button class="knopf" data-a="dateiOeffnen">Öffnen</button></div>' : '')
     + (autoAn() && D.profil.autoZiel.meldung ? (m => `<div class="hinweis"><span>Kalorienziel angepasst: <b>${zahl(m.alt)} → ${zahl(m.neu)} kcal</b>. Dein Bedarf liegt jetzt bei etwa ${zahl(m.bedarf)} kcal (${m.quelle === 'verlauf' ? 'aus deinem Verlauf' : 'aus deinen Körperdaten'}), minus ${zahl(autoDefizit())} kcal Defizit. Eiweiß und Fett bleiben gleich.</span><button class="knopf" data-a="autoOk">OK</button></div>`)(D.profil.autoZiel.meldung) : '')
+    + (S.tab === 'heute' ? (sf => sf ? `<div class="hinweis"><span>${sf.nie ? 'Du hast noch nie eine Sicherung gemacht.' : `Deine letzte Sicherung ist ${sf.n} Tage her.`} Lade ab und zu eine herunter, damit deine Daten sicher sind, falls der Browser seinen Speicher löscht.</span><span style="display:flex;gap:6px;flex:none"><button class="knopf" data-a="export">Sichern</button><button class="knopf2" data-a="sicherungSpaeter">Später</button></span></div>` : '')(sicherungFaellig()) : '')
     + (imTestfenster ? '<div class="hinweis warn testfenster">Achtung: Das ist Claudes Vorschaufenster. Hier wird nichts dauerhaft gespeichert. Öffne die App über die Desktop-Verknüpfung „Kalorien-Tracker“ (platinwolf181.github.io/kalorien-tracker).</div>' : '');
   $('app').innerHTML = fehler + inhalt;
   if (S.tab === 'verlauf' && S.fTab !== 'ueberblick') zeichneCharts();
@@ -1337,21 +1351,30 @@ function kachelReihe(liste) {
 }
 function lmZeile(x) {
   const g = stdMenge(x), fav = D.favoriten.includes(x.name);
-  return `<div class="zeile2"><button class="wahl" data-a="wahl" data-v="${esc(x.name)}"><b>${esc(x.name)}</b><span class="klein">${istSupp(x) ? mengeText(g, x.einh) + ' · ' + esc(suppKurz(x, g)) : zahl(Math.round(x.kcal * g / 100)) + ' kcal · ' + mengeText(g, x.einh)}</span></button>
+  return `<div class="zeile2"><button class="wahl" data-a="wahl" data-v="${esc(x.name)}"><b>${esc(x.name)}</b><span class="klein">${istSupp(x) ? mengeText(g, x.einh) + ' · ' + esc(suppKurz(x, g)) : zahl(Math.round(x.kcal * g / 100)) + ' kcal · ' + mengeText(g, x.einh)}${markeText(x)}</span></button>
     <button class="stern ${fav ? 'an' : ''}" data-a="fav" data-v="${esc(x.name)}" aria-label="Favorit">${fav ? '★' : '☆'}</button>
     <button class="plusk" data-a="plusLm" data-v="${esc(x.name)}" aria-label="${esc(x.name)} eintragen">+</button></div>`;
 }
 function rezZeile(r) {
-  const w = f => zahl(Math.round(rezWert(r, f)));
-  return `<div class="zeile2"><button class="wahl" data-a="rezWahl" data-v="${esc(r.name)}"><b>${esc(r.name)}</b><span class="klein">${w('kcal')} kcal · KH ${w('k')} g · Fett ${w('f')} g · Eiweiß ${w('e')} g</span></button>
+  const port = rezPort(r), w = f => zahl(Math.round(rezWert(r, f) / port));
+  return `<div class="zeile2"><button class="wahl" data-a="rezWahl" data-v="${esc(r.name)}"><b>${esc(r.name)}</b><span class="klein">${port > 1 ? '1 von ' + zahl(port, 1) + ' Portionen: ' : ''}${w('kcal')} kcal · KH ${w('k')} g · Fett ${w('f')} g · Eiweiß ${w('e')} g</span></button>
     <button class="plusk" data-a="plusRez" data-v="${esc(r.name)}" aria-label="${esc(r.name)} eintragen">+</button></div>`;
 }
+const SORTEN = [['neu', 'Neueste zuerst'], ['zuletzt', 'Zuletzt benutzt'], ['az', 'A–Z']];
+/* sortiert eine Liste; schl = Schlüssel im Verlauf (Mahlzeiten mit „rez:“) */
+function sortiert(liste, schl, grund) {
+  const art = D.sortierung || 'neu';
+  if (art === 'az') return [...liste].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+  if (art === 'zuletzt') { const pos = x => { const i = D.zuletzt.indexOf(schl(x)); return i < 0 ? 1e9 : i; }; return [...liste].map((x, i) => [x, i]).sort((a, b) => pos(a[0]) - pos(b[0]) || a[1] - b[1]).map(x => x[0]); }
+  return liste;
+}
+const sortWahl = grund => `<div class="sortier"><span class="klein">Sortieren</span><select id="sortWahl" aria-label="Sortieren">${SORTEN.map(([v, t]) => `<option value="${v}" ${(D.sortierung || 'neu') === v ? 'selected' : ''}>${v === 'neu' && grund ? 'Standard' : t}</option>`).join('')}</select></div>`;
 function zeichneListe() {
   const leer = t => `<p class="klein" style="margin-top:14px">${t}</p>`;
   let h = '';
   if (P.suche.trim()) {
     const q = norm(P.suche.trim());
-    h = D.rezepte.filter(r => norm(r.name).includes(q)).map(rezZeile).join('') + alleLM().filter(x => norm(x.name).includes(q)).map(lmZeile).join('')
+    h = D.rezepte.filter(r => norm(r.name).includes(q)).map(rezZeile).join('') + alleLM().filter(x => norm(x.name + ' ' + (x.marke || '')).includes(q)).map(lmZeile).join('')
       || leer('Nichts gefunden. Unter Nahrungsmittel → Eigene kannst du es selbst anlegen.');
   } else if (P.reiter === 'alle') {
     h = kachelReihe([['code', 'barcode', 'Strichcode einscannen'], ['schnell', 'blitz', 'Schnell hinzufügen']]);
@@ -1361,13 +1384,14 @@ function zeichneListe() {
   } else if (P.reiter === 'mahlzeiten') {
     const vorher = lies(plusTage(S.datum, -1)).eintraege.some(e => e.m === P.m);
     h = kachelReihe([['bauNeu', 'teller', 'Mahlzeit erstellen'], ['kopierenDlg', 'kopie', 'Vorherige Mahlzeit kopieren', !vorher]]);
-    h += '<div class="liste-kopf">Meine Mahlzeiten</div>' + (D.rezepte.length ? D.rezepte.map(rezZeile).join('')
+    h += '<div class="liste-kopf">Meine Mahlzeiten</div>' + (D.rezepte.length > 1 ? sortWahl(false) : '') + (D.rezepte.length ? sortiert(D.rezepte, r => 'rez:' + r.name).map(rezZeile).join('')
       : leer('Noch keine eigenen Mahlzeiten. Tippe auf „Mahlzeit erstellen", gib einen Namen ein und füge die Zutaten mit Gramm hinzu.'));
   } else {
     const kats = ['Favoriten', 'Eigene', 'Supplements', ...KATEGORIEN];
     h = kachelReihe([P.kat === 'Supplements' ? ['suppNeu', 'plus', 'Supplement erstellen'] : ['eigenNeu', 'plus', 'Nahrungsmittel erstellen'], ['schnell', 'blitz', 'Schnell hinzufügen']]) + `<div class="chips zeile" style="margin-top:12px">${kats.map(k => `<button class="chip ${P.kat === k ? 'an' : ''}" data-a="kat" data-v="${esc(k)}">${esc(k)}</button>`).join('')}</div>`;
     const liste = P.kat === 'Favoriten' ? D.favoriten.map(lmNach).filter(Boolean) : P.kat === 'Eigene' ? D.eigene.filter(x => !istSupp(x)) : P.kat === 'Supplements' ? D.eigene.filter(istSupp) : GRUND.filter(x => x.kat === P.kat);
-    h += liste.map(lmZeile).join('') || leer(P.kat === 'Favoriten' ? 'Noch keine Favoriten. Tippe bei einem Nahrungsmittel auf ☆.' : P.kat === 'Supplements' ? 'Noch keine Supplements. Leg oben eins an, die Angaben pro Kapsel, Tablette oder Tropfen stehen auf der Packung.' : 'Noch keine eigenen Nahrungsmittel. Leg oben eins an, die Werte stehen hinten auf der Packung.');
+    const grund = !['Favoriten', 'Eigene', 'Supplements'].includes(P.kat);
+    h += (liste.length > 1 ? sortWahl(grund) : '') + sortiert(liste, x => x.name).map(lmZeile).join('') || leer(P.kat === 'Favoriten' ? 'Noch keine Favoriten. Tippe bei einem Nahrungsmittel auf ☆.' : P.kat === 'Supplements' ? 'Noch keine Supplements. Leg oben eins an, die Angaben pro Kapsel, Tablette oder Tropfen stehen auf der Packung.' : 'Noch keine eigenen Nahrungsmittel. Leg oben eins an, die Werte stehen hinten auf der Packung.');
   }
   $('pl').innerHTML = h;
 }
@@ -1416,7 +1440,7 @@ function zeichneRezMenge() {
     <p class="klein" style="margin:0">${r.teile.map(t => esc(t.name) + ' ' + mengeText(t.g, t.einh || 'g')).join(' · ')}</p>
     ${P.edit ? `<p class="klein" style="margin:0">Hier änderst du nur diesen Eintrag im Tagebuch.${rezNach(r.name) ? ' Die Zutaten der gespeicherten Mahlzeit änderst du über „Mahlzeit bearbeiten“.' : ''}</p>` : ''}
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b>Menge</b><div class="umsch">${[['p', 'Portionen'], ['g', 'Gramm']].map(([id, t]) => `<button class="${P.rezEinh === id ? 'an' : ''}" data-a="rezEinh" data-v="${id}">${t}</button>`).join('')}</div></div>
-    <label class="feld" style="margin:0"><span>${P.rezEinh === 'p' ? 'Anzahl Portionen' : 'Menge in g'}</span><input id="portionen" inputmode="decimal" value="${P.faktor > 0 ? (P.rezEinh === 'p' ? zahl(P.faktor, 2) : zahl(P.faktor * rezG(r), 1)) : ''}"></label>
+    <label class="feld" style="margin:0"><span>${P.rezEinh === 'p' ? 'Anzahl Portionen' : 'Menge in g'}</span><input id="portionen" inputmode="decimal" value="${P.faktor > 0 ? (P.rezEinh === 'p' ? zahl(P.faktor * rezPort(r), 2) : zahl(P.faktor * rezG(r), 1)) : ''}"></label>
     <p class="klein" id="rezInfo" style="margin:0"></p>
     <div class="vorschau" id="vs"></div>
     <div style="display:flex;gap:8px">${rezNach(r.name) ? `<button class="knopf2" data-a="bauEdit" data-v="${esc(r.name)}">${P.edit ? 'Mahlzeit bearbeiten' : 'Bearbeiten'}</button>` : ''}<button class="knopf" data-a="rezEintragen" style="flex:1">${P.edit ? 'Speichern' : 'Eintragen'}</button></div></div>`;
@@ -1424,7 +1448,9 @@ function zeichneRezMenge() {
 }
 function zeigeRezVorschau() {
   const f = P.faktor || 0, ges = rezG(P.rez);
-  $('rezInfo').textContent = '1 Portion = ganze Mahlzeit = ' + zahl(ges, 1) + ' g' + (f > 0 ? (P.rezEinh === 'p' ? ' · eingetragen: ' + zahl(f * ges, 0) + ' g' : ' · eingetragen: ' + portionText(f)) : '');
+  const port = rezPort(P.rez);
+  $('rezInfo').textContent = (port > 1 ? '1 Portion = ' + zahl(ges / port, 0) + ' g (die Mahlzeit ergibt ' + zahl(port, 1) + ' Portionen, zusammen ' + zahl(ges, 0) + ' g)' : '1 Portion = ganze Mahlzeit = ' + zahl(ges, 1) + ' g')
+    + (f > 0 ? (P.rezEinh === 'p' ? ' · eingetragen: ' + zahl(f * ges, 0) + ' g' : ' · eingetragen: ' + portionText(f * port)) : '');
   $('vs').innerHTML = vorschauHtml(feld => rezWert(P.rez, feld) * f);
 }
 function rezEintragen() {
@@ -1437,11 +1463,11 @@ function rezEintragen() {
 const neueId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 function merke(schl, menge) { D.zuletzt = [schl, ...D.zuletzt.filter(n => n !== schl)].slice(0, 25); D.mengen[schl] = menge; }
 function fuegeLm(l, g) {
-  tag(S.datum).eintraege.push({ id: neueId(), m: P.m, name: l.name, g, einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f, ...(l.mikro ? { mikro: l.mikro } : {}) });
+  tag(S.datum).eintraege.push({ id: neueId(), m: P.m, name: l.name, g, einh: l.einh, kcal: l.kcal, e: l.e, k: l.k, f: l.f, ...(l.mikro ? { mikro: l.mikro } : {}), ...(l.marke ? { marke: l.marke } : {}) });
   merke(l.name, g); sichern(); render();
 }
 function fuegeRez(r, f) {
-  tag(S.datum).eintraege.push({ id: neueId(), m: P.m, name: r.name, faktor: f, teile: r.teile.map(t => ({ ...t })) });
+  tag(S.datum).eintraege.push({ id: neueId(), m: P.m, name: r.name, faktor: f, teile: r.teile.map(t => ({ ...t })), ...(rezPort(r) > 1 ? { portionen: rezPort(r) } : {}) });
   merke('rez:' + r.name, f); sichern(); render();
 }
 let toastZeit;
@@ -1453,10 +1479,10 @@ function toast(text) {
   clearTimeout(toastZeit); toastZeit = setTimeout(() => t.classList.remove('an'), 1800);
 }
 /* ---------- Eigene Mahlzeit erstellen / bearbeiten ---------- */
-function oeffneBau(teile, alt, ausPicker) {
+function oeffneBau(teile, alt, ausPicker, portionen) {
   if (!ausPicker) P = { m: 'fruehstueck', suche: '', reiter: 'mahlzeiten', kat: KATEGORIEN[0] };
   P.ausPicker = !!ausPicker; P.rez = null; P.lm = null; P.schnell = false;
-  P.bau = { name: alt || '', teile: teile.map(t => ({ ...t })), alt: alt || null, waehlen: false, suche: '' };
+  P.bau = { name: alt || '', teile: teile.map(t => ({ ...t })), alt: alt || null, waehlen: false, suche: '', portionen: portionen > 1 ? portionen : 1 };
   zeichneDlg(); if (!dlg.open) dlg.showModal();
 }
 /* true = darf geschlossen werden; bei ungespeicherten Änderungen wird vorher gefragt (und ggf. gespeichert) */
@@ -1487,6 +1513,7 @@ function zeichneBau() {
         <input data-bt="${i}" inputmode="decimal" value="${zahl(t.g, 1)}" aria-label="Menge ${esc(t.name)}"><span class="klein">${t.einh || 'g'}</span>
         <button class="weg" data-a="bauWeg" data-v="${i}" aria-label="${esc(t.name)} entfernen">×</button></div>`).join('') || '<p class="klein">Noch keine Zutaten. Füge sie unten hinzu und gib jeweils die Grammzahl ein.</p>'}
       <button class="knopf2" data-a="bauPlus" style="margin-top:12px;width:100%">+ Zutat hinzufügen</button>
+      <label class="feld" style="margin:14px 0 0"><span>Ergibt Portionen <span class="klein" style="font-weight:400">(z. B. 5, wenn du ein Blech auf 5 Abende aufteilst)</span></span><input id="bauPort" inputmode="decimal" value="${zahl(b.portionen, 1)}"></label>
     </div>
     <div class="vorschau" id="bauSum"></div>
     <p class="warn" id="bauFehler" style="margin:0" hidden></p>
@@ -1496,7 +1523,8 @@ function zeichneBau() {
 function zeigeBauSumme() {
   const r = { teile: P.bau.teile };
   P.bau.teile.forEach((t, i) => { const el = $('zk' + i); if (el) el.textContent = zahl(Math.round(t.kcal * t.g / 100)) + ' kcal · ' + zahl(Math.round(t.e * t.g / 100)) + ' g Eiweiß'; });
-  $('bauSum').innerHTML = vorschauHtml(f => rezWert(r, f), 'So viel deckt die ganze Mahlzeit von deinem Tagesbedarf:');
+  const port = P.bau.portionen > 1 ? P.bau.portionen : 1;
+  $('bauSum').innerHTML = vorschauHtml(f => rezWert(r, f) / port, port > 1 ? `So viel deckt eine Portion (1 von ${zahl(port, 1)}) von deinem Tagesbedarf:` : 'So viel deckt die ganze Mahlzeit von deinem Tagesbedarf:');
 }
 function zeichneBauListe() {
   const q = norm(P.bau.suche.trim());
@@ -1516,7 +1544,7 @@ function bauSpeichern() {
     if (!confirm(`Die Mahlzeit „${name}“ gibt es schon. Mit diesen Zutaten überschreiben?`)) return zeige('Nicht gespeichert. Wähl einen anderen Namen oder überschreib die bestehende Mahlzeit.');
     D.rezepte = D.rezepte.filter(r => r.name !== name || r.name === b.alt);
   }
-  const neu = { name, teile: b.teile.map(t => ({ ...t })) };
+  const neu = { name, teile: b.teile.map(t => ({ ...t })), ...(b.portionen > 1 ? { portionen: b.portionen } : {}) };
   if (b.alt) {
     const i = D.rezepte.findIndex(r => r.name === b.alt);
     if (i >= 0) D.rezepte[i] = neu; else D.rezepte.unshift(neu);
@@ -1586,7 +1614,7 @@ async function eanSuche(roh) {
   const kcal = n['energy-kcal_100g'] != null ? n['energy-kcal_100g'] : (n['energy_100g'] != null ? n['energy_100g'] / 4.184 : null);
   const marke = (p.brands || '').split(',')[0].trim(), titel = (p.product_name_de || p.product_name || '').trim();
   const name = ((marke && !titel.toLowerCase().includes(marke.toLowerCase()) ? marke + ' ' : '') + titel).trim();
-  const v = { name, kcal: w(kcal), e: w(n.proteins_100g), k: w(n.carbohydrates_100g), f: w(n.fat_100g) };
+  const v = { name, marke, kcal: w(kcal), e: w(n.proteins_100g), k: w(n.carbohydrates_100g), f: w(n.fat_100g) };
   const fehlt = [v.kcal, v.e, v.k, v.f].some(x => x == null);
   erg().innerHTML = eanForm(code, v, 'Gefunden bei Open Food Facts. ' + (fehlt ? 'Einige Werte fehlen, bitte von der Packung ergänzen.' : 'Kurz mit der Packung vergleichen, dann speichern.'));
 }
@@ -1695,6 +1723,7 @@ function eanForm(code, v, text, gespeichert) {
       <input type="file" id="ocrDatei" accept="image/*" capture="environment" hidden>
       <p class="klein" id="ocrStatus" style="margin:8px 0 0" hidden></p></div>
     <label class="feld"><span>Name</span><input name="name" required maxlength="60" value="${esc(v.name || '')}"></label>
+    <label class="feld"><span>Marke <span class="klein" style="font-weight:400">(optional, z. B. ESN, Rühl, Edeka)</span></span><input name="marke" maxlength="40" value="${esc(v.marke || '')}"></label>
     <div class="gitter">
       <label class="feld"><span>kcal je 100 g</span><input name="kcal" inputmode="decimal" value="${wert(v.kcal)}"></label>
       <label class="feld"><span>Eiweiß (g)</span><input name="e" inputmode="decimal" value="${wert(v.e)}"></label>
@@ -1904,20 +1933,20 @@ const AKTION = {
   zu() { if (bauVerlassenOk()) dlg.close(); },
   kat(v) { P.kat = v; P.suche = ''; zeichneDlg(); },
   wahl(v) { P.lm = lmNach(v); P.g = D.mengen[v] || P.lm.pg || 100; zeichneDlg(); },
-  rezWahl(v) { P.rez = rezNach(v); P.faktor = D.mengen['rez:' + v] || 1; P.rezEinh = 'p'; zeichneDlg(); },
-  rezEinh(v) { P.rezEinh = v; zeichneRezMenge(); const i = $('portionen'); i.focus(); i.select(); },
+  rezWahl(v) { P.rez = rezNach(v); P.faktor = D.mengen['rez:' + v] || 1 / rezPort(P.rez); P.rezEinh = D.rezEinh || 'p'; zeichneDlg(); },
+  rezEinh(v) { P.rezEinh = v; D.rezEinh = v; sichern(); zeichneRezMenge(); const i = $('portionen'); i.focus(); i.select(); },
   portion(v) { P.faktor = Number(v); $('portionen').value = zahl(P.faktor, 1); zeigeRezVorschau(); },
   rezEintragen,
   rezept(v) { oeffneBau(alsTeile(lies(S.datum).eintraege.filter(e => e.m === v)), null, false); },
   rezWeg(v) { if (confirm(`Mahlzeit „${v}“ löschen? Bereits Eingetragenes bleibt erhalten.`)) { D.rezepte = D.rezepte.filter(r => r.name !== v); sichern(); render(); } },
   reiter(v) { P.reiter = v; P.suche = ''; zeichneDlg(); },
   plusLm(v) { const l = lmNach(v), g = stdMenge(l); fuegeLm(l, g); toast(`✓ ${l.name} · ${mengeText(g, l.einh)} eingetragen`); zeichneListe(); },
-  plusRez(v) { const r = rezNach(v), f = D.mengen['rez:' + v] || 1; fuegeRez(r, f); toast(`✓ ${r.name} eingetragen`); zeichneListe(); },
+  plusRez(v) { const r = rezNach(v), f = D.mengen['rez:' + v] || 1 / rezPort(r); fuegeRez(r, f); toast(`✓ ${r.name} eingetragen`); zeichneListe(); },
   kopierenDlg() { AKTION.kopieren(P.m); toast('✓ Mahlzeit vom Vortag übernommen'); zeichneListe(); },
   bauNeu() { oeffneBau([], null, true); },
   bauNeuEigene() { oeffneBau([], null, false); },
-  bauEdit(v) { const r = rezNach(v); if (r) oeffneBau(r.teile, r.name, !P.edit); },
-  bauEditEigene(v) { const r = rezNach(v); if (r) oeffneBau(r.teile, r.name, false); },
+  bauEdit(v) { const r = rezNach(v); if (r) oeffneBau(r.teile, r.name, !P.edit, r.portionen); },
+  bauEditEigene(v) { const r = rezNach(v); if (r) oeffneBau(r.teile, r.name, false, r.portionen); },
   bauAbbruch() { if (!bauVerlassenOk()) return; endeBau(); },
   bauPlus() { P.bau.waehlen = true; P.bau.suche = ''; zeichneDlg(); },
   bauZurueck() { P.bau.waehlen = false; zeichneDlg(); },
@@ -1949,7 +1978,7 @@ const AKTION = {
   schnell() { P.schnell = true; zeichneDlg(); },
   bearbeiten(v) {
     const e = lies(S.datum).eintraege.find(x => x.id === v); if (!e) return;
-    if (e.teile) { P = { m: e.m, edit: e.id, rez: { name: e.name, teile: e.teile }, faktor: e.faktor, rezEinh: 'p' }; zeichneRezMenge(); dlg.showModal(); return; }
+    if (e.teile) { P = { m: e.m, edit: e.id, rez: { name: e.name, teile: e.teile, portionen: e.portionen }, faktor: e.faktor, rezEinh: D.rezEinh || 'p' }; zeichneRezMenge(); dlg.showModal(); return; }
     const basis = lmNach(e.name);
     P = { m: e.m, suche: '', kat: null, edit: e.id, g: e.g, schnell: false, lm: { name: e.name, kcal: e.kcal, e: e.e, k: e.k, f: e.f, einh: e.einh, pn: basis ? basis.pn : null, pg: basis ? basis.pg : null, mikro: e.mikro, kat: basis ? basis.kat : (e.mikro ? 'Supplement' : null) } };
     zeichneDlg(); dlg.showModal();
@@ -1977,7 +2006,9 @@ const AKTION = {
     a.href = URL.createObjectURL(new Blob([JSON.stringify(D, null, 1)], { type: 'application/json' }));
     a.download = 'kalorien-sicherung-' + heute() + '.json';
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    D.letzteSicherung = heute(); delete D.sicherungSpaeter; sichern(); render(); toast('✓ Sicherung heruntergeladen');
   },
+  sicherungSpaeter() { D.sicherungSpaeter = plusTage(heute(), 3); sichern(); render(); },
   import() { $('datei').click(); },
 };
 document.addEventListener('click', ev => {
@@ -1998,13 +2029,15 @@ document.addEventListener('input', ev => {
     for (const x of ['k', 'e', 'f']) { P.zd.proz[x] = kc ? g[x] * KCAL_G[x] / kc * 100 : 0; $('mp_' + x).value = zahl(P.zd.proz[x], 1); }
     $('zdKcal').value = Math.round(kc); zdSumme();
   }
-  else if (t.id === 'portionen') { const v = num(t.value), ges = rezG(P.rez); P.faktor = !(v > 0) ? null : P.rezEinh === 'p' ? v : ges > 0 ? v / ges : null; zeigeRezVorschau(); }
+  else if (t.id === 'portionen') { const v = num(t.value), ges = rezG(P.rez); P.faktor = !(v > 0) ? null : P.rezEinh === 'p' ? v / rezPort(P.rez) : ges > 0 ? v / ges : null; zeigeRezVorschau(); }
   else if (t.id === 'bauName') { P.bau.name = t.value; P.bau.geaendert = true; }
+  else if (t.id === 'bauPort') { const v = num(t.value); P.bau.portionen = v > 0 ? v : 1; P.bau.geaendert = true; zeigeBauSumme(); }
   else if (t.dataset.bt) { P.bau.teile[Number(t.dataset.bt)].g = num(t.value) || 0; P.bau.geaendert = true; zeigeBauSumme(); }
   else if (t.id === 'bauSuch') { P.bau.suche = t.value; zeichneBauListe(); }
   else if (t.dataset.p) { D.profil[t.dataset.p] = num(t.value); sichern(); $('zielAus').innerHTML = zielAusgabe(); }
 });
 document.addEventListener('change', ev => {
+  if (ev.target.id === 'sortWahl') { D.sortierung = ev.target.value; sichern(); zeichneListe(); return; }
   if (ev.target.id === 'ocrDatei') { if (ev.target.files && ev.target.files[0]) fotoAuslesen(ev.target.files[0]); return; }
   const t = ev.target;
   if (t.id === 'dp') { if (t.value && t.value <= heute()) { S.datum = t.value; render(); } }
@@ -2050,6 +2083,7 @@ document.addEventListener('submit', ev => {
     if (kcal == null || kcal < 0) return zeige('Bitte die kcal je 100 g angeben.');
     if (name !== alt && (lmNach(name) || rezNach(name))) return zeige('Diesen Namen gibt es schon. Häng z. B. die Sorte an.');
     const neu = L(name, 'Eigene', kcal, wert('e') || 0, wert('k') || 0, wert('f') || 0); if (ean) neu.ean = ean;
+    const marke = (f.get('marke') || '').trim(); if (marke) neu.marke = marke;
     const i = alt ? D.eigene.findIndex(x => x.name === alt) : -1;
     if (i >= 0) D.eigene[i] = neu; else D.eigene.unshift(neu);
     sichern(); P.code = null; P.eigen = null; P.lm = neu; P.g = stdMenge(neu); zeichneDlg(); toast(alt ? '✓ Geändert' : '✓ Gespeichert');
@@ -2114,6 +2148,9 @@ const VORLAGEN_MZ = [
   /* 1 Portion = ein Fünftel vom Blech: 500 g Pute, 250 g Pilze, 3 Paprika, 2 Gemüsezwiebeln, 500 g Rote Bete, ohne Öl */
   { id: 'ofengemuese-pute', name: 'Ofengemüse mit Pute (⅕ Blech)',
     teile: [['Putengeschnetzeltes, roh', 100], ['Champignons', 50], ['Paprika', 90], ['Zwiebel', 100], ['Rote Bete, gegart (vakuumiert)', 100]] },
+  /* ganzes Blech, ergibt 5 Portionen; ersetzt die Fünftel-Vorlage, sofern unverändert */
+  { id: 'ofengemuese-blech', name: 'Ofengemüse mit Pute', portionen: 5, ersetzt: ['Ofengemüse mit Pute (⅕ Blech)', [100, 50, 90, 100, 100]],
+    teile: [['Putengeschnetzeltes, roh', 500], ['Champignons', 250], ['Paprika', 450], ['Zwiebel', 500], ['Rote Bete, gegart (vakuumiert)', 500]] },
 ];
 /* Olivers Supplements laut Packung (19.11.2026); menge = Tagesdosis, Werte pro Tagesdosis */
 const VORLAGEN_SUPP = [
@@ -2141,7 +2178,7 @@ function vorlagenEinspielen() {
       const [altName, altG] = v.ersetzt, alt = rezNach(altName);
       if (alt && alt.teile.map(t => t.g).join() === altG.join()) D.rezepte = D.rezepte.filter(r => r !== alt);
     }
-    if (teile.every(Boolean) && !rezNach(v.name)) D.rezepte.push({ name: v.name, teile });
+    if (teile.every(Boolean) && !rezNach(v.name)) D.rezepte.push({ name: v.name, teile, ...(v.portionen ? { portionen: v.portionen } : {}) });
   }
   for (const v of VORLAGEN_SUPP) {
     if (D.vorlagen.includes(v.id)) continue;
