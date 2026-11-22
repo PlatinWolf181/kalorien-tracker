@@ -46,6 +46,9 @@ nav button.fab { flex: none; width: 56px; height: 56px; margin-left: 8px; justif
 h2 { font-size: 17px; margin: 0 0 10px; }
 .klein { font-size: 14px; color: var(--ink2); }
 .kopf-rechts { display: flex; align-items: center; gap: 8px; flex: none; }
+.rund.wolke { display: grid; place-items: center; color: var(--c-kcal); }
+.rund.wolke.warten { color: var(--ink2); }
+.rund.wolke.problem { color: var(--warn); }
 .serie { display: inline-flex; align-items: center; gap: 4px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--flaeche2); color: var(--ink); font-weight: 700; font-size: 15px; }
 .serie.offen { opacity: .55; }
 .rund { width: 40px; height: 40px; border-radius: 50%; background: var(--flaeche2); font-size: 18px; font-weight: 700; flex: none; }
@@ -566,6 +569,7 @@ function sichern() {
   try { D.gespeichertAm = new Date().toISOString(); localStorage.setItem(KEY, JSON.stringify(D)); speicherFehler = false; }
   catch (e) { speicherFehler = true; }
   inDateiSchreiben();
+  cloudVormerken();
   if (dauerhaft !== true && navigator.storage && navigator.storage.persist) navigator.storage.persist().then(ok => { dauerhaft = ok; }).catch(() => {});
 }
 if (navigator.storage && navigator.storage.persisted) navigator.storage.persisted().then(ok => { dauerhaft = ok; }).catch(() => {});
@@ -582,9 +586,13 @@ async function handleHolen() {
   catch (e) { return null; }
 }
 /* Hat dieser Stand echte Daten (nicht nur leere Grundeinstellungen + Vorlagen)? */
-const hatDaten = d => !!d && (Object.values(d.tage || {}).some(t => (t.eintraege || []).length || t.gewicht != null || t.wasser)
-  || (d.eigene || []).length || !!(d.profil && (d.profil.alter || d.profil.zielKcal || d.profil.zielProz || (d.profil.tagesziele || []).length))
-  || (d.rezepte || []).length > 2);
+function hatDaten(d) {
+  if (!d) return false;
+  const vorlage = new Set([...VORLAGEN_MZ, ...VORLAGEN_SUPP].map(v => v.name));
+  return Object.values(d.tage || {}).some(t => (t.eintraege || []).length || t.gewicht != null || t.wasser || (t.training || []).length)
+    || (d.eigene || []).some(x => !vorlage.has(x.name)) || (d.rezepte || []).some(r => !vorlage.has(r.name))
+    || !!(d.profil && (d.profil.alter || d.profil.zielKcal || d.profil.zielProz || (d.profil.tagesziele || []).length));
+}
 let dateiTimer;
 function inDateiSchreiben() {
   if (!dateiHandle || dateiStatus !== 'verbunden') return;
@@ -598,6 +606,7 @@ function standUebernehmen(d) {
   const n = neu();
   D = { ...n, ...d, profil: { ...n.profil, ...d.profil }, zeiten: { ...n.zeiten, ...d.zeiten } };
   try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) { speicherFehler = true; }
+  cloudVormerken();
 }
 /* Datei und Browser abgleichen: der Stand mit echten Daten bzw. der neuere gewinnt */
 async function dateiAbgleichen() {
@@ -642,6 +651,267 @@ async function dateiVerbinden() {
     await dateiAbgleichen(); render(); toast('✓ Speicherdatei verbunden');
   } catch (e) { dateiStatus = 'getrennt'; render(); }
 }
+/* ---------- Cloud-Abgleich über Firebase (Anmeldung mit Google, Daten in Firestore, Frankfurt) ----------
+   Jedes Gerät speichert weiter zuerst im eigenen Browser. Abgeglichen werden „Bausteine“: jeder Tag einzeln
+   ('d:2026-11-22') und jede übrige Einstellung ('k:profil', 'k:rezepte' …), jeweils mit Zeitstempel.
+   Die neuere Änderung gewinnt (z = Zeitpunkt des Hochladens, a = Zeitpunkt der Änderung). Hat ein Tag auf zwei Geräten Änderungen (z. B. offline), werden die Einträge vereint.
+   In Firestore: nutzer/{uid} = Einstellungen, nutzer/{uid}/monate/{JJJJ-MM} = Tage des Monats (je Dokument < 1 MB). */
+/*SYNC_ANFANG*/
+const NUR_LOKAL = ['gespeichertAm', 'letzteSicherung', 'sicherungSpaeter'];
+function hashText(s) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677); }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+function bausteine(d) {
+  const b = {};
+  for (const k in d) if (k !== 'tage' && !NUR_LOKAL.includes(k) && d[k] !== undefined) b['k:' + k] = JSON.stringify(d[k]);
+  for (const t in d.tage || {}) b['d:' + t] = JSON.stringify(d.tage[t]);
+  return b;
+}
+function bausteinSetzen(d, k, w) {
+  const n = k.slice(2), v = w == null ? undefined : JSON.parse(w);
+  if (k.startsWith('d:')) { d.tage = d.tage || {}; if (v === undefined) delete d.tage[n]; else d.tage[n] = v; }
+  else if (v === undefined) delete d[n]; else d[n] = v;
+}
+/* Ein Tag wurde auf zwei Geräten geändert: Einträge und Training vereinen, sonst gilt der neuere Stand */
+function tagVereinen(a, b, aNeuer) {
+  const [jung, alt] = aNeuer ? [a || {}, b || {}] : [b || {}, a || {}];
+  const t = { ...alt, ...jung };
+  for (const f of ['eintraege', 'training']) if (jung[f] || alt[f]) {
+    const ids = new Set((jung[f] || []).map(x => x.id));
+    t[f] = [...(jung[f] || []), ...(alt[f] || []).filter(x => !ids.has(x.id))];
+  }
+  for (const f of ['gewicht', 'wasser']) if (t[f] == null && alt[f] != null) t[f] = alt[f];
+  return t;
+}
+/* Lokale Änderungen seit dem letzten Abgleich vormerken (meta.offen), mit dem Zeitpunkt der Änderung */
+function aenderungenMerken(d, meta, jetzt) {
+  const b = bausteine(d); let n = 0;
+  for (const k in b) {
+    const h = hashText(b[k]), st = meta.stand[k], of = meta.offen[k];
+    if (st && st.h === h) { if (of) delete meta.offen[k]; continue; }
+    if (of && of.h === h) continue;
+    meta.offen[k] = { h, z: jetzt }; n++;
+  }
+  /* Fehlt lokal ein Tag oder eine Einstellung, wird das nie als Löschung hochgeladen (Schutz, falls der Browser
+     seinen Speicher verliert); beim nächsten Abgleich kommt der Baustein aus der Cloud zurück */
+  for (const k in meta.offen) if (!(k in b)) delete meta.offen[k];
+  return n;
+}
+/* Stand aus der Cloud ({k: {w, z}}) einarbeiten; true = lokal hat sich etwas geändert */
+function cloudEinarbeiten(d, meta, remote) {
+  let geaendert = false;
+  for (const k in remote) {
+    const r = remote[k];
+    if (!r || typeof r.z !== 'number' || !/^[dk]:/.test(k)) continue;
+    const st = meta.stand[k], of = meta.offen[k];
+    const fehlt = r.w != null && !(k.startsWith('d:') ? !!d.tage && k.slice(2) in d.tage : k.slice(2) in d);
+    if (st && st.z >= r.z && !fehlt) continue; /* kennen wir schon */
+    const rh = r.w == null ? null : hashText(r.w), ra = typeof r.a === 'number' ? r.a : r.z; /* ra = Zeitpunkt der Änderung */
+    if (of) {
+      if (of.h === rh) { meta.stand[k] = { h: rh, z: r.z }; delete meta.offen[k]; continue; }
+      if (k.startsWith('d:') && of.h !== null && r.w != null) {
+        const t = k.slice(2), v = tagVereinen(d.tage[t], JSON.parse(r.w), of.z > ra), vh = hashText(JSON.stringify(v));
+        d.tage[t] = v; meta.stand[k] = { h: rh, z: r.z };
+        if (vh === rh) delete meta.offen[k]; else meta.offen[k] = { h: vh, z: Math.max(of.z, ra) };
+        geaendert = true; continue;
+      }
+      if (of.z > ra) { meta.stand[k] = { h: rh, z: r.z }; continue; } /* lokale Änderung ist neuer und wird hochgeladen */
+      delete meta.offen[k];
+    }
+    bausteinSetzen(d, k, r.w); meta.stand[k] = { h: rh, z: r.z }; geaendert = true;
+  }
+  return geaendert;
+}
+/* Erste Anmeldung auf diesem Gerät: leeres Gerät übernimmt die Cloud, sonst wird zusammengeführt (nichts geht verloren) */
+function ersteVerbindung(d, remote, uid, lokalHatDaten, jetzt) {
+  const meta = { uid, an: true, stand: {}, offen: {} };
+  const keys = Object.keys(remote).filter(k => /^[dk]:/.test(k) && remote[k] && remote[k].w != null);
+  if (keys.length && !lokalHatDaten) {
+    d.tage = {};
+    for (const k of keys) bausteinSetzen(d, k, remote[k].w);
+  } else if (keys.length) {
+    for (const k of keys) {
+      const rv = JSON.parse(remote[k].w), n = k.slice(2);
+      if (k.startsWith('d:')) d.tage[n] = d.tage[n] ? tagVereinen(d.tage[n], rv, false) : rv;
+      else if ((n === 'eigene' || n === 'rezepte') && Array.isArray(d[n]) && Array.isArray(rv)) { const namen = new Set(rv.map(x => x.name)); d[n] = [...rv, ...d[n].filter(x => !namen.has(x.name))]; }
+      else if (['favoriten', 'vorlagen', 'zuletzt'].includes(n) && Array.isArray(d[n]) && Array.isArray(rv)) d[n] = [...new Set([...rv, ...d[n]])];
+      else if (n === 'mengen' && d[n] && rv) d[n] = { ...d[n], ...rv };
+      else d[n] = rv;
+    }
+  }
+  for (const k in remote) if (/^[dk]:/.test(k) && remote[k] && typeof remote[k].z === 'number') meta.stand[k] = { h: remote[k].w == null ? null : hashText(remote[k].w), z: remote[k].z };
+  aenderungenMerken(d, meta, jetzt);
+  return meta;
+}
+/*SYNC_ENDE*/
+/* Firebase-Projekt (Werte aus der Firebase-Konsole; nicht geheim, geschützt wird über die Firestore-Regeln) */
+const CLOUD_CFG = null;
+const FB_URL = 'https://www.gstatic.com/firebasejs/10.14.1/';
+const CLOUD_KEY = 'kalorien-cloud';
+/* status: aus | laden | an | sende | offline | fehler */
+const cloud = { status: 'aus', nutzer: null, fehler: '', meldung: '', zuletzt: null, bereit: false, laeuft: false, nochmal: false, inFlug: {}, aus: [] };
+function cloudMetaLaden() {
+  try { const m = JSON.parse(localStorage.getItem(CLOUD_KEY) || 'null'); if (m && m.stand) return { offen: {}, ...m }; } catch (e) { /* leer */ }
+  return { uid: null, an: false, stand: {}, offen: {} };
+}
+let cloudMeta = cloudMetaLaden();
+function metaSichern() { try { localStorage.setItem(CLOUD_KEY, JSON.stringify(cloudMeta)); } catch (e) { /* voll */ } }
+const cloudAn = () => !!(CLOUD_CFG && cloudMeta.an && cloudMeta.uid);
+function auffuellen(d) { const n = neu(); for (const k in n) if (d[k] === undefined) d[k] = n[k]; d.profil = { ...n.profil, ...d.profil }; d.zeiten = { ...n.zeiten, ...d.zeiten }; }
+let fb = null, fbLaden = null;
+function fbBereit() {
+  if (!CLOUD_CFG) return Promise.reject(new Error('nicht eingerichtet'));
+  return fbLaden = fbLaden || Promise.all(['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js'].map(x => import(FB_URL + x))).then(([a, au, fs]) => {
+    const app = a.initializeApp(CLOUD_CFG);
+    fb = { au, fs, auth: au.getAuth(app), db: fs.getFirestore(app) };
+    au.getRedirectResult(fb.auth).catch(e => { cloud.status = 'fehler'; cloud.fehler = cloudFehlerText(e); spaeterRendern(); });
+    au.onAuthStateChanged(fb.auth, u => nutzerGeaendert(u));
+    return fb;
+  }).catch(e => { fbLaden = null; throw e; });
+}
+function cloudFehlerText(e) {
+  const c = (e && e.code) || '';
+  return {
+    'auth/unauthorized-domain': 'Diese Adresse ist in Firebase noch nicht freigegeben (Authentication → Einstellungen → Autorisierte Domains).',
+    'auth/operation-not-allowed': 'Die Google-Anmeldung ist in Firebase noch nicht eingeschaltet (Authentication → Anmeldemethode → Google).',
+    'auth/network-request-failed': 'Keine Internetverbindung.',
+    'permission-denied': 'Die Datenbank lehnt den Zugriff ab. Sind die Firestore-Regeln veröffentlicht?',
+    'unavailable': 'Die Cloud ist gerade nicht erreichbar. Es wird später nachgeholt.',
+  }[c] || ('Fehler: ' + (c || (e && e.message) || 'unbekannt'));
+}
+/* Nicht mitten ins Tippen neu zeichnen */
+function spaeterRendern() {
+  const a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !dlg.contains(a)) { a.addEventListener('blur', () => render(), { once: true }); return; }
+  render();
+}
+async function cloudHolen(uid) {
+  const { getDoc, getDocs, doc, collection } = fb.fs;
+  const [s, m] = await Promise.all([getDoc(doc(fb.db, 'nutzer', uid)), getDocs(collection(fb.db, 'nutzer', uid, 'monate'))]);
+  const r = {};
+  if (s.exists()) Object.assign(r, s.data().b || {});
+  m.forEach(x => Object.assign(r, x.data().b || {}));
+  return r;
+}
+async function nutzerGeaendert(u) {
+  cloud.aus.forEach(f => f()); cloud.aus = []; cloud.bereit = false; cloud.nutzer = u || null; cloud.authBekannt = true;
+  if (!u) { cloud.status = 'aus'; spaeterRendern(); return; }
+  cloud.status = 'laden'; spaeterRendern();
+  try {
+    const remote = await cloudHolen(u.uid);
+    if (cloud.nutzer !== u) return; /* inzwischen abgemeldet */
+    const jetzt = Date.now();
+    if (cloudMeta.uid !== u.uid || (!hatDaten(D) && Object.keys(remote).length)) {
+      const lokal = hatDaten(D), leer = !Object.keys(remote).length;
+      cloudMeta = ersteVerbindung(D, remote, u.uid, lokal, jetzt);
+      cloud.meldung = leer ? 'Deine Daten werden jetzt in die Cloud hochgeladen. Melde dich auf dem anderen Gerät auch an.'
+        : lokal ? 'Die Daten von diesem Gerät und aus der Cloud wurden zusammengeführt.' : 'Deine Daten aus der Cloud sind jetzt auf diesem Gerät.';
+    } else {
+      aenderungenMerken(D, cloudMeta, jetzt);
+      cloudEinarbeiten(D, cloudMeta, remote);
+    }
+    cloudMeta.an = true; cloudMeta.email = u.email || '';
+    auffuellen(D); metaSichern(); sichern();
+    cloud.bereit = true; cloud.status = 'an'; cloud.fehler = ''; cloud.zuletzt = new Date();
+    beobachten(u.uid);
+    await hochladen();
+    spaeterRendern();
+  } catch (e) {
+    cloud.status = navigator.onLine && e.code !== 'unavailable' ? 'fehler' : 'offline'; cloud.fehler = cloudFehlerText(e); spaeterRendern();
+  }
+}
+/* Änderungen anderer Geräte sofort übernehmen */
+function beobachten(uid) {
+  const { onSnapshot, doc, collection } = fb.fs;
+  const nimm = map => {
+    for (const k in map) if (cloud.inFlug[k] === (map[k] && map[k].z)) delete map[k]; /* eigener Schreibvorgang unterwegs */
+    if (cloudEinarbeiten(D, cloudMeta, map)) { auffuellen(D); sichern(); spaeterRendern(); }
+    metaSichern(); cloud.zuletzt = new Date();
+  };
+  const fehler = e => { cloud.status = 'fehler'; cloud.fehler = cloudFehlerText(e); spaeterRendern(); };
+  cloud.aus.push(onSnapshot(doc(fb.db, 'nutzer', uid), s => { if (s.exists()) nimm({ ...(s.data().b || {}) }); }, fehler));
+  cloud.aus.push(onSnapshot(collection(fb.db, 'nutzer', uid, 'monate'), q => {
+    const map = {}; q.docChanges().forEach(c => { if (c.type !== 'removed') Object.assign(map, c.doc.data().b || {}); }); nimm(map);
+  }, fehler));
+}
+async function hochladen() {
+  if (!cloud.bereit || !cloud.nutzer) return;
+  if (cloud.laeuft) { cloud.nochmal = true; return; }
+  const keys = Object.keys(cloudMeta.offen);
+  if (!keys.length) { if (cloud.status === 'sende' || cloud.status === 'offline') { cloud.status = 'an'; spaeterRendern(); } return; }
+  const { writeBatch, doc } = fb.fs, uid = cloud.nutzer.uid, jetzt = Date.now(), b = bausteine(D), stamm = {}, monate = {}, gesendet = {};
+  for (const k of keys) {
+    const w = k in b ? b[k] : null, e = { w, z: jetzt, a: cloudMeta.offen[k].z };
+    gesendet[k] = { h: w == null ? null : hashText(w), oz: cloudMeta.offen[k].z };
+    if (k.startsWith('d:')) (monate[k.slice(2, 9)] = monate[k.slice(2, 9)] || {})[k] = e; else stamm[k] = e;
+    cloud.inFlug[k] = jetzt;
+  }
+  cloud.laeuft = true; cloud.status = navigator.onLine ? 'sende' : 'offline'; cloudSymbol();
+  try {
+    const batch = writeBatch(fb.db);
+    if (Object.keys(stamm).length) batch.set(doc(fb.db, 'nutzer', uid), { b: stamm }, { merge: true });
+    for (const m in monate) batch.set(doc(fb.db, 'nutzer', uid, 'monate', m), { b: monate[m] }, { merge: true });
+    await batch.commit();
+    for (const k in gesendet) {
+      cloudMeta.stand[k] = { h: gesendet[k].h, z: jetzt };
+      const of = cloudMeta.offen[k]; if (of && of.z === gesendet[k].oz) delete cloudMeta.offen[k];
+    }
+    metaSichern(); cloud.zuletzt = new Date(); cloud.status = 'an'; cloud.fehler = '';
+  } catch (e) { cloud.status = navigator.onLine ? 'fehler' : 'offline'; cloud.fehler = cloudFehlerText(e); }
+  for (const k in gesendet) if (cloud.inFlug[k] === jetzt) delete cloud.inFlug[k];
+  cloud.laeuft = false; cloudSymbol(); if (S.tab === 'cloud') spaeterRendern();
+  if (cloud.nochmal) { cloud.nochmal = false; hochladen(); }
+}
+/* nach jedem Speichern: Änderungen vormerken und hochladen */
+let cloudTimer;
+function cloudVormerken() {
+  if (!cloudMeta.uid || !cloudMeta.an) return;
+  clearTimeout(cloudTimer);
+  cloudTimer = setTimeout(cloudJetzt, 800);
+}
+function cloudJetzt() {
+  clearTimeout(cloudTimer);
+  if (!cloudMeta.uid || !cloudMeta.an) return;
+  aenderungenMerken(D, cloudMeta, Date.now()); metaSichern(); hochladen();
+}
+async function cloudAnmelden() {
+  cloud.fehler = '';
+  try {
+    await fbBereit();
+    const p = new fb.au.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+    try { await fb.au.signInWithPopup(fb.auth, p); }
+    catch (e) {
+      if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment', 'auth/web-storage-unsupported'].includes(e.code)) await fb.au.signInWithRedirect(fb.auth, p);
+      else if (!['auth/popup-closed-by-user', 'auth/cancelled-popup-request'].includes(e.code)) throw e;
+    }
+  } catch (e) { cloud.status = 'fehler'; cloud.fehler = e.code ? cloudFehlerText(e) : 'Die Anmeldung konnte nicht geladen werden. Bist du online?'; render(); }
+}
+async function cloudAbmelden() {
+  if (!confirm('Vom Cloud-Abgleich abmelden?\n\nDeine Daten bleiben auf diesem Gerät und in der Cloud, es wird nur nicht mehr abgeglichen.')) return;
+  cloudJetzt(); cloudMeta.an = false; metaSichern();
+  try { await fbBereit(); await fb.au.signOut(fb.auth); } catch (e) { /* egal */ }
+  cloud.status = 'aus'; cloud.meldung = ''; render();
+}
+/* Wolke oben rechts: grau = gleicht ab, orange = Problem/offline */
+function cloudSymbol() {
+  const el = document.querySelector('[data-a="tab"][data-v="cloud"].wolke'); if (!el) return;
+  const z = cloudZustand(); el.className = 'rund wolke ' + z.klasse; el.title = z.text; el.setAttribute('aria-label', 'Cloud-Abgleich: ' + z.text);
+}
+function cloudZustand() {
+  const n = Object.keys(cloudMeta.offen).length;
+  if (!cloud.nutzer) return !cloud.authBekannt && !cloud.fehler ? { klasse: 'warten', text: 'verbinde …' } : { klasse: 'problem', text: cloud.fehler || 'nicht angemeldet' };
+  if (cloud.status === 'fehler') return { klasse: 'problem', text: cloud.fehler };
+  if (cloud.status === 'offline') return { klasse: 'problem', text: 'offline' + (n ? ', ' + n + ' Änderungen warten' : '') };
+  if (cloud.status === 'laden' || cloud.status === 'sende' || n) return { klasse: 'warten', text: 'gleicht ab …' };
+  return { klasse: '', text: 'alles abgeglichen' };
+}
+addEventListener('online', () => { if (cloud.nutzer) { if (!cloud.bereit) nutzerGeaendert(cloud.nutzer); else { cloud.status = 'an'; hochladen(); cloudSymbol(); } } else if (cloudAn() && !fb) fbBereit().catch(() => {}); });
+addEventListener('offline', () => { if (cloud.nutzer) { cloud.status = 'offline'; cloudSymbol(); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { if (cloudMeta.an && cloudMeta.uid) cloudJetzt(); } else if (cloud.bereit) hochladen(); });
 /* Claudes Vorschau-/Testfenster läuft auf localhost und speichert nicht dauerhaft */
 const imTestfenster = ['localhost', '127.0.0.1'].includes(location.hostname);
 
@@ -854,8 +1124,8 @@ function autoKarte() {
 const S = { tab: 'heute', datum: heute(), bereich: 30, analyse: 'e', fTab: 'ueberblick', anaAuf: {} };
 const TABS = [['heute', 'Heute', 'home'], ['verlauf', 'Fortschritt', 'chart'], ['mehr', 'Mehr', 'mehr']];
 /* Unterseiten und wohin „zurück“ führt */
-const UNTER = { ziele: 'mehr', makroziele: 'ziele', zeiten: 'mehr', sicherung: 'mehr' };
-const SEITENTITEL = { verlauf: 'Fortschritt', mehr: 'Mehr', ziele: 'Ziele', makroziele: 'Kalorien- & Makro-Ziele', zeiten: 'Mahlzeiten-Zeiten', sicherung: 'Datensicherung' };
+const UNTER = { ziele: 'mehr', makroziele: 'ziele', zeiten: 'mehr', sicherung: 'mehr', cloud: 'mehr' };
+const SEITENTITEL = { verlauf: 'Fortschritt', mehr: 'Mehr', ziele: 'Ziele', makroziele: 'Kalorien- & Makro-Ziele', zeiten: 'Mahlzeiten-Zeiten', sicherung: 'Datensicherung', cloud: 'Cloud-Abgleich' };
 const ICON = {
   fruehstueck: '<path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 9h1.500a2.500 2.500 0 0 1 0 5H17"/><path d="M8 3v2M12 3v2"/>',
   mittag: '<path d="M4 10a8 6 0 0 1 16 0z"/><path d="M3 14h18"/><path d="M5 18h14l-1 2H6z"/>',
@@ -876,6 +1146,7 @@ const ICON = {
   tropfen: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
   blitz: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   teller: '<path d="M3 11h18a9 9 0 0 1-18 0z"/><path d="M9 7c0-2 2-2 2-4M14 7c0-2 2-2 2-4"/>',
+  wolke: '<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
   hantel: '<path d="M6 7v10M18 7v10M3 9.5v5M21 9.5v5M6 12h12"/>',
   kopie: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
 };
@@ -887,7 +1158,7 @@ function titelDatum(k) {
   return ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][alsDatum(k).getDay()] + ', ' + kurzDatum(k);
 }
 function sicherungFaellig() {
-  if (dateiStatus === 'verbunden' || !hatDaten(D)) return null;
+  if (dateiStatus === 'verbunden' || cloudAn() || !hatDaten(D)) return null;
   if (D.sicherungSpaeter && D.sicherungSpaeter > heute()) return null;
   const tage = Object.keys(D.tage).filter(k => (D.tage[k].eintraege || []).length).sort();
   const seit = D.letzteSicherung || tage[0]; if (!seit) return null;
@@ -900,11 +1171,12 @@ function render() {
     : `<button class="titel" data-a="kalender" aria-label="Datum wählen">${titelDatum(S.datum)} <small>▾</small></button>
        <input type="date" id="dp" class="dp" max="${heute()}" value="${S.datum}" tabindex="-1" aria-hidden="true">`)
     + '<div class="kopf-rechts">' + (S.tab === 'heute' ? (sr => sr.n ? `<button class="serie${sr.offen ? ' offen' : ''}" data-a="serie" aria-label="${sr.n} Tage in Folge erfasst">🔥 ${sr.n}</button>` : '')(serie()) : '')
+    + (cloudAn() ? (z => `<button class="rund wolke ${z.klasse}" data-a="tab" data-v="cloud" title="Cloud-Abgleich: ${esc(z.text)}" aria-label="Cloud-Abgleich: ${esc(z.text)}">${icon('wolke', 20)}</button>`)(cloudZustand()) : '')
     + '<button class="rund" data-a="thema" title="Hell / Dunkel" aria-label="Hell oder dunkel umschalten">◐</button></div>';
   const aktiv = id => S.tab === id || (id === 'mehr' && !!UNTER[S.tab]);
   $('nav').innerHTML = TABS.map(([id, t, ic]) => `<button data-a="tab" data-v="${id}" class="${aktiv(id) ? 'an' : ''}">${icon(ic)}<span>${t}</span></button>`).join('')
     + `<button class="fab" data-a="fab" aria-label="Eintrag hinzufügen">${icon('plus', 28)}</button>`;
-  const inhalt = ({ heute: viewHeute, verlauf: viewVerlauf, mehr: viewMehr, ziele: viewZiele, makroziele: viewMakroziele, zeiten: viewZeiten, sicherung: viewSicherung }[S.tab] || viewHeute)();
+  const inhalt = ({ heute: viewHeute, verlauf: viewVerlauf, mehr: viewMehr, ziele: viewZiele, makroziele: viewMakroziele, zeiten: viewZeiten, sicherung: viewSicherung, cloud: viewCloud }[S.tab] || viewHeute)();
   const fehler = (speicherFehler ? '<div class="hinweis warn">Speichern im Browser ist fehlgeschlagen. Bitte unter Mehr → Datensicherung eine Sicherung herunterladen.</div>' : '')
     + (dateiStatus === 'getrennt' ? '<div class="hinweis"><span>Deine Speicherdatei ist eingerichtet. Ein Klick verbindet sie wieder, dein Browser fragt einmal nach.</span><button class="knopf" data-a="dateiVerbinden">Verbinden</button></div>' : '')
     + (dateiMoeglich && dateiStatus === 'aus' && !hatDaten(D) && !imTestfenster ? '<div class="hinweis"><span>In diesem Browser sind keine Daten. Hast du eine Speicherdatei? Dann hol deine Daten mit einem Klick zurück.</span><button class="knopf" data-a="dateiOeffnen">Öffnen</button></div>' : '')
@@ -1267,6 +1539,7 @@ function viewMehr() {
     ${zeile('tab', 'ziele', 'ziel', 'Ziele')}
     ${zeile('mehrMahlzeiten', '', 'teller', 'Mahlzeiten & Nahrungsmittel')}
     ${zeile('tab', 'zeiten', 'uhr', 'Mahlzeiten-Zeiten')}
+    ${CLOUD_CFG ? zeile('tab', 'cloud', 'wolke', 'Cloud-Abgleich') : ''}
     ${zeile('tab', 'sicherung', 'sicherung', 'Datensicherung')}
     ${zeile('thema', '', 'mond', 'Hell / Dunkel')}
   </section>
@@ -1333,6 +1606,30 @@ function viewZeiten() {
     <div class="gitter">${MAHLZEITEN.map(([id, t]) => `<label class="feld"><span>${t}</span><input type="time" data-z="${id}" value="${esc(D.zeiten[id] || '')}"></label>`).join('')}</div>
   </section>`;
 }
+function viewCloud() {
+  if (!CLOUD_CFG) return '<section class="karte"><h2>Cloud-Abgleich</h2><p class="klein" style="margin:0">Noch nicht eingerichtet.</p></section>';
+  if (!fbLaden) fbBereit().catch(() => {});
+  const zeile = (t, w) => `<div class="zl" style="cursor:default"><span>${t}</span><b>${w}</b></div>`;
+  const uhrzeit = d => d ? d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : '–';
+  if (!cloud.nutzer) {
+    const verbinde = cloudMeta.an && !cloud.authBekannt && !cloud.fehler;
+    return `<section class="karte"><h2>Cloud-Abgleich</h2>
+      <p class="klein" style="margin-top:0">${verbinde ? 'Verbinde …' : cloudMeta.an ? 'Du bist auf diesem Gerät nicht mehr angemeldet. Melde dich wieder an, dann geht der Abgleich weiter.'
+        : 'Melde dich auf jedem Gerät (PC und Handy) einmal mit deinem Google-Konto an. Danach gleichen sich Tagebuch, Gewicht, Training, Mahlzeiten, Nahrungsmittel und Ziele automatisch ab.'}</p>
+      ${cloud.fehler ? `<p class="warn" style="margin:0 0 10px">${esc(cloud.fehler)}</p>` : ''}
+      ${verbinde ? '' : '<button class="knopf" data-a="cloudAnmelden" style="width:100%">Mit Google anmelden</button>'}
+      <p class="klein" style="margin:12px 0 0">Deine Daten liegen dann zusätzlich in einer Datenbank von Google Firebase in Frankfurt. Nur du kannst sie lesen. Auf diesem Gerät bleibt alles wie bisher gespeichert. Ohne Internet geht alles weiter und wird später abgeglichen.</p></section>`;
+  }
+  const z = cloudZustand(), n = Object.keys(cloudMeta.offen).length;
+  return (cloud.meldung ? `<div class="hinweis"><span>${esc(cloud.meldung)}</span><button class="knopf" data-a="cloudMeldungOk">OK</button></div>` : '')
+    + `<section class="karte"><h2>Cloud-Abgleich</h2>
+      <p style="margin:0 0 8px"><b class="${z.klasse === 'problem' ? 'warn' : ''}">${z.klasse ? esc(z.text.charAt(0).toUpperCase() + z.text.slice(1)) : '✓ Alles abgeglichen'}</b></p>
+      ${zeile('Angemeldet als', esc(cloud.nutzer.email || 'Google-Konto'))}
+      ${zeile('Letzter Abgleich', uhrzeit(cloud.zuletzt))}
+      ${zeile('Wartende Änderungen', zahl(n))}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="knopf2" data-a="cloudNeu">Jetzt abgleichen</button><button class="knopf2" data-a="cloudAbmelden">Abmelden</button></div>
+      <p class="klein" style="margin:12px 0 0">Jede Änderung wird automatisch hochgeladen. Änderungen vom anderen Gerät erscheinen nach ein paar Sekunden, auch ohne neu zu laden. Ohne Internet wird gesammelt und später nachgeholt.</p></section>`;
+}
 function viewSicherung() {
   const tage = Object.keys(D.tage).filter(k => (D.tage[k].eintraege || []).length || D.tage[k].gewicht != null || D.tage[k].wasser);
   const eintraege = Object.values(D.tage).reduce((a, t) => a + (t.eintraege || []).length, 0);
@@ -1356,10 +1653,10 @@ function viewSicherung() {
     ${zeile('Eigene Nahrungsmittel', zahl(D.eigene.length))}
     ${zeile('Zuletzt gespeichert', zuletzt ? zuletzt.toLocaleDateString('de-DE') + ', ' + zuletzt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : '–')}
     ${zeile('Dauerhaft gesichert', imTestfenster ? 'nein (Vorschaufenster)' : dauerhaft === true ? 'ja' : dauerhaft === false ? 'Browser entscheidet' : 'unbekannt')}
-    <p class="klein" style="margin:10px 0 0">${imTestfenster ? 'Im Claude-Vorschaufenster gehen die Daten beim Schließen verloren. Nutze die Desktop-Verknüpfung.' : 'Die Daten liegen nur in diesem Browser auf diesem Gerät. Browser-Bereinigungen (z. B. „Browserdaten löschen“ oder der GX Cleaner) löschen sie mit.'}</p>
+    <p class="klein" style="margin:10px 0 0">${imTestfenster ? 'Im Claude-Vorschaufenster gehen die Daten beim Schließen verloren. Nutze die Desktop-Verknüpfung.' : cloudAn() ? 'Die Daten liegen in diesem Browser und zusätzlich in der Cloud.' : 'Die Daten liegen nur in diesem Browser auf diesem Gerät. Browser-Bereinigungen (z. B. „Browserdaten löschen“ oder der GX Cleaner) löschen sie mit.'}</p>
   </section>
   <section class="karte">
-    <p class="klein" style="margin-top:0">Deine Daten liegen nur in diesem Browser. Die Sicherung nimmst du auch für den Abgleich zwischen PC und Handy.</p>
+    <p class="klein" style="margin-top:0">${cloudAn() ? 'Deine Daten werden über den Cloud-Abgleich zwischen deinen Geräten abgeglichen. Eine Sicherung ist eine zusätzliche Kopie für den Notfall.' : 'Deine Daten liegen nur in diesem Browser. Für den automatischen Abgleich zwischen PC und Handy gibt es unter Mehr den Cloud-Abgleich.'}</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="knopf2" data-a="export">Sicherung herunterladen</button><button class="knopf2" data-a="import">Sicherung einspielen</button></div>
   </section>`;
 }
@@ -2038,6 +2335,10 @@ const AKTION = {
     const warSupp = !!P.supp; sichern(); P.eigen = null; P.supp = null; P.lm = null; P.reiter = 'lm'; P.kat = warSupp ? 'Supplements' : 'Eigene'; zeichneDlg(); toast('Gelöscht');
   },
   dateiAnlegen() { dateiAnlegen(); },
+  cloudAnmelden() { cloudAnmelden(); },
+  cloudAbmelden() { cloudAbmelden(); },
+  cloudNeu() { if (cloud.nutzer) nutzerGeaendert(cloud.nutzer); },
+  cloudMeldungOk() { cloud.meldung = ''; render(); },
   dateiOeffnen() { dateiOeffnen(); },
   dateiVerbinden() { dateiVerbinden(); },
   zielStd() { oeffneZiel('std'); },
@@ -2289,7 +2590,7 @@ $('datei').addEventListener('change', async ev => {
   try {
     const d = JSON.parse(await datei.text());
     if (!d || typeof d.tage !== 'object' || !d.profil) throw 0;
-    if (!confirm('Sicherung einspielen? Die aktuellen Daten in diesem Browser werden dabei ersetzt.')) return;
+    if (!confirm('Sicherung einspielen? Die aktuellen Daten in diesem Browser werden dabei ersetzt' + (cloudAn() ? ', über den Cloud-Abgleich auch auf deinen anderen Geräten.' : '.'))) return;
     const n = neu(); D = { ...n, ...d, profil: { ...n.profil, ...d.profil }, zeiten: { ...n.zeiten, ...d.zeiten } };
     sichern(); render();
   } catch (e) { alert('Das ist keine gültige Sicherungsdatei.'); }
@@ -2374,6 +2675,7 @@ vorlagenEinspielen();
 zieleUebernehmen();
 autoZielPruefen();
 dateiStart();
+if (cloudAn()) fbBereit().catch(() => { cloud.status = navigator.onLine ? 'fehler' : 'offline'; cloud.fehler = 'Der Cloud-Abgleich konnte nicht geladen werden.'; render(); });
 render();
 </script>
 </body>
