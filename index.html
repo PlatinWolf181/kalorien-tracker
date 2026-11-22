@@ -749,7 +749,14 @@ function ersteVerbindung(d, remote, uid, lokalHatDaten, jetzt) {
 }
 /*SYNC_ENDE*/
 /* Firebase-Projekt (Werte aus der Firebase-Konsole; nicht geheim, geschützt wird über die Firestore-Regeln) */
-const CLOUD_CFG = null;
+const CLOUD_CFG = {
+  apiKey: 'AIzaSyA1PCxZbYn1y2klv6ULf7IcQtr375MSEXc',
+  authDomain: 'fitness-app-4e1a8.firebaseapp.com',
+  projectId: 'fitness-app-4e1a8',
+  storageBucket: 'fitness-app-4e1a8.firebasestorage.app',
+  messagingSenderId: '211569959646',
+  appId: '1:211569959646:web:7fcb3920571d9f3753984f'
+};
 const FB_URL = 'https://www.gstatic.com/firebasejs/10.14.1/';
 const CLOUD_KEY = 'kalorien-cloud';
 /* status: aus | laden | an | sende | offline | fehler */
