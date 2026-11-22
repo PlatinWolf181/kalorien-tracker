@@ -1609,7 +1609,8 @@ function zeichneBau() {
     if (matchMedia('(hover:hover)').matches) $('bauSuch').focus();
     return;
   }
-  dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="weg" data-a="bauAbbruch" aria-label="Abbrechen">←</button><h2>${b.alt ? 'Mahlzeit bearbeiten' : 'Mahlzeit erstellen'}</h2><span style="width:32px"></span></div>
+  dlg.innerHTML = `<div class="dlg voll"><div class="dlg-kopf"><button class="weg" data-a="bauAbbruch" aria-label="Abbrechen">←</button><h2>${b.alt ? 'Mahlzeit bearbeiten' : b.kopieVon ? 'Kopie bearbeiten' : 'Mahlzeit erstellen'}</h2><span style="width:32px"></span></div>
+    ${b.kopieVon ? `<p class="hinweis" style="margin:0"><span>Kopie von „${esc(b.kopieVon)}“. Die alte Mahlzeit bleibt unverändert. Gib der Kopie einen eigenen Namen und ändere, was du willst.</span></p>` : ''}
     <label class="feld" style="margin:0"><span>Name der Mahlzeit</span><input id="bauName" maxlength="60" placeholder="z. B. Reispudding mit Whey und Himbeeren" value="${esc(b.name)}"></label>
     <div class="liste">
       <div class="liste-kopf" style="margin-top:4px">Zutaten</div>
@@ -1621,8 +1622,18 @@ function zeichneBau() {
     </div>
     <div class="vorschau" id="bauSum"></div>
     <p class="warn" id="bauFehler" style="margin:0" hidden></p>
-    <div style="display:flex;gap:8px">${b.alt ? '<button class="knopf2" data-a="bauLoeschen">Löschen</button>' : ''}<button class="knopf" data-a="bauSpeichern" style="flex:1">Mahlzeit speichern</button></div></div>`;
+    <div style="display:flex;gap:8px">${b.alt ? '<button class="knopf2" data-a="bauLoeschen">Löschen</button><button class="knopf2" data-a="bauKopie">Kopieren</button>' : ''}<button class="knopf" data-a="bauSpeichern" style="flex:1">${b.kopieVon ? 'Kopie speichern' : 'Mahlzeit speichern'}</button></div></div>`;
   zeigeBauSumme();
+}
+/* Mahlzeit kopieren: der Baukasten arbeitet ab jetzt an einer neuen Mahlzeit, die alte bleibt wie gespeichert */
+function bauKopie() {
+  const b = P.bau, basis = (b.alt || b.name).replace(/ \(Kopie( \d+)?\)$/, '');
+  let name = basis + ' (Kopie)';
+  for (let n = 2; rezNach(name) || lmNach(name); n++) name = basis + ' (Kopie ' + n + ')';
+  b.kopieVon = b.alt; b.alt = null; b.name = name.slice(0, 60); b.geaendert = true;
+  zeichneDlg();
+  const f = $('bauName'); if (f) { f.focus(); f.select(); }
+  toast('✓ Kopie erstellt');
 }
 function zeigeBauSumme() {
   const r = { teile: P.bau.teile };
@@ -2119,6 +2130,7 @@ const AKTION = {
   },
   bauWeg(v) { P.bau.teile.splice(Number(v), 1); P.bau.geaendert = true; zeichneDlg(); },
   bauSpeichern,
+  bauKopie,
   bauLoeschen() {
     const alt = P.bau.alt;
     if (!confirm(`Mahlzeit „${alt}“ löschen? Bereits Eingetragenes bleibt erhalten.`)) return;
