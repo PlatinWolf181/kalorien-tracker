@@ -767,7 +767,9 @@ function cloudMetaLaden() {
 }
 let cloudMeta = cloudMetaLaden();
 function metaSichern() { try { localStorage.setItem(CLOUD_KEY, JSON.stringify(cloudMeta)); } catch (e) { /* voll */ } }
-const cloudAn = () => !!(CLOUD_CFG && cloudMeta.an && cloudMeta.uid);
+/* Im Claude-Testfenster (localhost) nie mit der echten Cloud verbinden, sonst landen Testdaten dort */
+const cloudGesperrt = () => imTestfenster && !/[?&]cloudtest\b/.test(location.search);
+const cloudAn = () => !!(CLOUD_CFG && !cloudGesperrt() && cloudMeta.an && cloudMeta.uid);
 function auffuellen(d) { const n = neu(); for (const k in n) if (d[k] === undefined) d[k] = n[k]; d.profil = { ...n.profil, ...d.profil }; d.zeiten = { ...n.zeiten, ...d.zeiten }; }
 let fb = null, fbLaden = null;
 function fbBereit() {
@@ -886,6 +888,7 @@ function cloudJetzt() {
   aenderungenMerken(D, cloudMeta, Date.now()); metaSichern(); hochladen();
 }
 async function cloudAnmelden() {
+  if (cloudGesperrt()) return;
   cloud.fehler = '';
   try {
     await fbBereit();
@@ -1615,6 +1618,7 @@ function viewZeiten() {
 }
 function viewCloud() {
   if (!CLOUD_CFG) return '<section class="karte"><h2>Cloud-Abgleich</h2><p class="klein" style="margin:0">Noch nicht eingerichtet.</p></section>';
+  if (cloudGesperrt()) return '<section class="karte"><h2>Cloud-Abgleich</h2><p class="klein" style="margin:0">Im Claude-Vorschaufenster ist der Cloud-Abgleich gesperrt, damit keine Testdaten in deine Cloud gelangen. Melde dich in der App über die Desktop-Verknüpfung an.</p></section>';
   if (!fbLaden) fbBereit().catch(() => {});
   const zeile = (t, w) => `<div class="zl" style="cursor:default"><span>${t}</span><b>${w}</b></div>`;
   const uhrzeit = d => d ? d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : '–';
