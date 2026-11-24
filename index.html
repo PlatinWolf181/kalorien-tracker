@@ -1998,9 +1998,68 @@ async function starteKamera() {
       } catch (e) { /* einzelnes Bild nicht lesbar */ }
     }, 300) };
   } catch (e) {
-    hin.textContent = 'Die Kamera ist nicht verfügbar oder wurde nicht erlaubt. Tipp die Nummer unter dem Strichcode ein.';
+    hin.textContent = 'Die Kamera ist nicht verfügbar oder wurde nicht erlaubt. Nimm ein Foto aus der Galerie oder tipp die Nummer unter dem Strichcode ein.';
     hin.hidden = false;
   }
+}
+/* Strichcode aus einem Foto (z. B. aus der Galerie). Läuft im Browser, das Foto verlässt das Gerät nicht.
+   Erst die eingebaute Erkennung (Android), findet die nichts oder fehlt sie (Edge am PC), ZXing als Ersatz */
+const CODE_FORMATE = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+const CODE_URL = 'https://cdn.jsdelivr.net/npm/barcode-detector@3.2.3/dist/iife/ponyfill.js';
+let codeLaden = null;
+function codeErsatzBereit() {
+  if (window.BarcodeDetectionAPI) return Promise.resolve();
+  return codeLaden = codeLaden || new Promise((ok, fehler) => {
+    const s = document.createElement('script'); s.src = CODE_URL;
+    s.onload = () => window.BarcodeDetectionAPI ? ok() : fehler(new Error('laden'));
+    s.onerror = () => { codeLaden = null; s.remove(); fehler(new Error('laden')); };
+    document.head.appendChild(s);
+  });
+}
+function bildLaden(datei) {
+  return new Promise((ok, fehler) => {
+    const url = URL.createObjectURL(datei), img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); ok(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); fehler(new Error('bild')); };
+    img.src = url;
+  });
+}
+/* Mehrere Größen probieren: kleine Codes brauchen viele Pixel, unscharfe gehen verkleinert oft besser */
+function bildGroessen(img) {
+  const lang = Math.max(img.naturalWidth, img.naturalHeight);
+  return [3000, 1600, 1000].filter((g, i) => i === 0 || g < lang).map(g => {
+    const f = Math.min(1, g / lang), c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * f); c.height = Math.round(img.naturalHeight * f);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  });
+}
+async function codeSuchen(Leser, bilder) {
+  let det; try { det = new Leser({ formats: CODE_FORMATE }); } catch (e) { return null; }
+  for (const b of bilder) {
+    try {
+      const t = await det.detect(b);
+      const n = t.map(x => String(x.rawValue || '').replace(/\D/g, '')).find(x => x.length >= 8);
+      if (n) return n;
+    } catch (e) { /* nächste Größe */ }
+  }
+  return null;
+}
+async function codeAusFoto(datei) {
+  const st = $('codeStatus'); if (!st) return;
+  const melde = (text, warn) => { st.hidden = false; st.className = warn ? 'warn' : 'klein'; st.textContent = text; };
+  melde('Suche den Strichcode im Foto …');
+  let bilder; try { bilder = bildGroessen(await bildLaden(datei)); } catch (e) { melde('Das Bild konnte nicht geöffnet werden.', true); return; }
+  let n = 'BarcodeDetector' in window ? await codeSuchen(window.BarcodeDetector, bilder) : null;
+  if (!n) {
+    melde('Suche den Strichcode im Foto … Beim ersten Mal dauert das ein paar Sekunden.');
+    try { await codeErsatzBereit(); } catch (e) { if ($('codeStatus')) melde('Die Strichcode-Erkennung konnte nicht geladen werden. Bist du online?', true); return; }
+    n = await codeSuchen(window.BarcodeDetectionAPI.BarcodeDetector, bilder);
+  }
+  if (!$('codeStatus')) return; /* Fenster inzwischen zu */
+  if (!n) { melde('Im Foto wurde kein Strichcode gefunden. Nimm ein Foto, auf dem der Strichcode möglichst groß und scharf ist, oder tipp die Nummer ein.', true); return; }
+  if (kam) { stopKamera(); $('camBox').hidden = true; $('camKnopf').hidden = false; }
+  st.hidden = true; $('eanFeld').value = n; eanSuche(n);
 }
 function zeichneCode() {
   const k = kameraMoeglich();
@@ -2008,8 +2067,11 @@ function zeichneCode() {
     <div class="liste">
       ${k ? `<div id="camBox" class="cam" hidden><video id="camVideo" playsinline muted></video><i></i></div>
       <button class="knopf" id="camKnopf" data-a="kamera" style="width:100%">Mit Kamera scannen</button>`
-        : '<p class="klein" style="margin-top:0">Mit der Kamera scannen geht in diesem Browser nicht. Tipp einfach die Nummer unter dem Strichcode ein.</p>'}
+        : '<p class="klein" style="margin-top:0">Mit der Kamera scannen geht in diesem Browser nicht. Nimm ein Foto vom Strichcode oder tipp die Nummer darunter ein.</p>'}
       <p class="warn" id="camHinweis" hidden></p>
+      <button class="knopf2" data-a="codeFoto" style="width:100%;margin-top:8px">Foto aus der Galerie wählen</button>
+      <input type="file" id="codeDatei" accept="image/*" hidden>
+      <p class="klein" id="codeStatus" style="margin:8px 0 0" hidden></p>
       <label class="feld" style="margin:12px 0 8px"><span>Barcode-Nummer</span><input id="eanFeld" inputmode="numeric" autocomplete="off" maxlength="14" placeholder="z. B. 4012345678901"></label>
       <button class="knopf2" data-a="eanSuche" style="width:100%">Suchen</button>
       <div id="eanErg"></div>
@@ -2375,6 +2437,7 @@ const AKTION = {
   analyse(v) { S.analyse = v; render(); },
   alleN() { S.alleN = !S.alleN; if ($('portionen')) zeigeRezVorschau(); else zeigeVorschau(); },
   ocrFoto() { const f = $('ocrDatei'); if (f) { f.value = ''; f.click(); } },
+  codeFoto() { const f = $('codeDatei'); if (f) { f.value = ''; f.click(); } },
   serie() {
     const sr = serie(), g = gewichtsTage(), tage = n => n === 1 ? '1 Tag' : n + ' Tage';
     const diff = g.length > 1 ? D.tage[g[g.length - 1]].gewicht - D.tage[g[0]].gewicht : null;
@@ -2525,6 +2588,7 @@ document.addEventListener('input', ev => {
 document.addEventListener('change', ev => {
   if (ev.target.id === 'sortWahl') { D.sortierung = ev.target.value; sichern(); zeichneListe(); return; }
   if (ev.target.id === 'ocrDatei') { if (ev.target.files && ev.target.files[0]) fotoAuslesen(ev.target.files[0]); return; }
+  if (ev.target.id === 'codeDatei') { if (ev.target.files && ev.target.files[0]) codeAusFoto(ev.target.files[0]); return; }
   const t = ev.target;
   if (t.id === 'dp') { if (t.value && t.value <= heute()) { S.datum = t.value; render(); } }
   else if (t.id === 'kg') { tag(S.datum).gewicht = num(t.value); sichern(); render(); }
